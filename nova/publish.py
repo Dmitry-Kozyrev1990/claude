@@ -8,7 +8,7 @@
 #   publish_day(DAY, fill=None, test=False)
 import json, os, time, subprocess, datetime, requests
 
-RAW = 'https://raw.githubusercontent.com/Dmitry-Kozyrev1990/claude/main/nova/'
+RAW = 'https://raw.githubusercontent.com/Dmitry-Kozyrev1990/claude/nova-content/nova/'
 D = '/tmp/nova/'
 os.makedirs(D, exist_ok=True)
 S = requests.get(RAW + 'content/schedule.json', timeout=30).json()
