@@ -1,0 +1,141 @@
+{
+ "channel": "@nova_family_ai",
+ "drafts": -1004433940112,
+ "ig_user_id": "28618953967735666",
+ "tg_account": "telegram_lors-aoul",
+ "ig_account": "instagram_marver-salmon",
+ "polls": {
+  "poll1": [
+   "Ваш ребёнок пользуется нейросетями?",
+   [
+    "Да, регулярно",
+    "Иногда",
+    "Пробовал пару раз",
+    "Нет",
+    "Не знаю"
+   ]
+  ],
+  "poll2": [
+   "Что сделаем с Новой в следующий раз?",
+   [
+    "Комикс про школу",
+    "Открытку бабушке и дедушке",
+    "Своего персонажа-питомца",
+    "Мини-игру в Scratch"
+   ]
+  ]
+ },
+ "days": {
+  "2026-10-05": [
+   {
+    "key": "mon_tg_intro",
+    "type": "tg_photo",
+    "card": "tg_0510_intro",
+    "text": "P1"
+   },
+   {
+    "key": "mon_ig_carousel",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_0510_1",
+     "ig_0510_2",
+     "ig_0510_3",
+     "ig_0510_4",
+     "ig_0510_5"
+    ],
+    "text": "IG"
+   },
+   {
+    "key": "mon_tg_guide",
+    "type": "tg_doc",
+    "file": "guide",
+    "text": "P1b",
+    "wait_after": "mon_tg_intro",
+    "delay": 60
+   }
+  ],
+  "2026-10-06": [
+   {
+    "key": "tue_tg_stat",
+    "type": "tg_photo",
+    "card": "tg_0610_stat",
+    "text": "P2"
+   },
+   {
+    "key": "tue_tg_poll",
+    "type": "tg_poll",
+    "poll": "poll1"
+   }
+  ],
+  "2026-10-07": [
+   {
+    "key": "wed_tg",
+    "type": "tg_photo",
+    "card": "tg_0710_color",
+    "text": "P3"
+   }
+  ],
+  "2026-10-08": [
+   {
+    "key": "thu_tg",
+    "type": "tg_photo",
+    "card": "tg_0810_shedevrum",
+    "text": "P4"
+   },
+   {
+    "key": "thu_ig",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_0810_1",
+     "ig_0810_2",
+     "ig_0810_3",
+     "ig_0810_4",
+     "ig_0810_5"
+    ],
+    "text": "IG4"
+   }
+  ],
+  "2026-10-09": [
+   {
+    "key": "fri_tg",
+    "type": "tg_photo",
+    "card": "tg_0910_errors",
+    "text": "P5"
+   }
+  ],
+  "2026-10-10": [
+   {
+    "key": "sat_tg",
+    "type": "tg_photo",
+    "card": "tg_1010_urok",
+    "text": "P6"
+   },
+   {
+    "key": "sat_ig",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_1010_1",
+     "ig_1010_2",
+     "ig_1010_3",
+     "ig_1010_4",
+     "ig_1010_5"
+    ],
+    "text": "IG6"
+   }
+  ],
+  "2026-10-11": [
+   {
+    "key": "sun_tg",
+    "type": "tg_photo",
+    "card": "tg_1110_digest",
+    "text": "P7",
+    "fill": "POLL_RESULTS"
+   },
+   {
+    "key": "sun_poll",
+    "type": "tg_poll",
+    "poll": "poll2"
+   }
+  ]
+ }
+}
