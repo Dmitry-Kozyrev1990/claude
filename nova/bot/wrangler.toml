@@ -1,0 +1,20 @@
+name = "nova-bot"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Раз в 15 минут: прогрев, напоминания о неоплаченных заказах
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nova-bot"
+database_id = "REPLACE_WITH_D1_ID" # wrangler d1 create nova-bot
+
+[vars]
+BOT_USERNAME = "REPLACE_BOT_USERNAME"      # без @
+SUPPORT_USERNAME = "REPLACE_SUPPORT"       # без @, куда писать живому человеку
+VAT_CODE = "1"                             # 1 = без НДС (ИП на УСН/патенте)
+
+# Секреты задаются командой `wrangler secret put <NAME>`:
+#   BOT_TOKEN, WEBHOOK_SECRET, YK_SHOP_ID, YK_SECRET_KEY, ADMIN_ID
