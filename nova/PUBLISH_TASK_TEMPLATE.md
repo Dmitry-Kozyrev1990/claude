@@ -1,7 +1,7 @@
 # Шаблон задачи публикации Новы
 
 Как пользоваться (nova-designer):
-1. Скопируй текст между линиями ниже и замени все `{DAY}` на дату (ГГГГ-ММ-ДД). Если в дне нет карусели — убери «и Instagram» из первой строки. Для дня с подстановкой (итоги опроса) в ячейке 2 замени `FILL=None` на `FILL="текст"`.
+1. Скопируй текст между линиями ниже и замени все `{DAY}` на дату (ГГГГ-ММ-ДД). Если в дне нет карусели — убери «и Instagram» из первой строки; если в дне только карусель — оставь в скобках «Instagram». День в расписании может называться с суффиксом (`2026-10-26_tg`) — тогда `{DAY}` = этот ключ целиком, а время запуска берётся по дате. Для дня с подстановкой (итоги опроса) в ячейке 2 замени `FILL=None` на `FILL="текст"`.
 2. create_trigger: run_once_at = {DAY}T16:15:00Z (19:15 МСК), отдельный запуск, НЕ send_later.
 3. Сразу после создания — update_trigger(model="claude-haiku-4-5-20251001"): публикация только выполняет готовый код.
 4. Тест в «черновики»: выполни те же ячейки в своём чате с `TEST=True` в ячейке 2, ячейку ожидания 19:30 пропусти.
@@ -31,6 +31,7 @@ names=[]
 for st in S['days'][DAY]:
     if st['type']=='tg_photo': names.append(st['card'])
     elif st['type']=='ig_carousel': names+=st['cards']
+    elif st['type']=='tg_doc': open(P+st['file'],'wb').write(requests.get(RAW+st['file'],timeout=60).content)
 bad=[]
 async with async_playwright() as p:
     b=await p.chromium.launch()
@@ -82,6 +83,8 @@ for st in S['days'][DAY]:
         elif st['type']=='tg_poll':
             time.sleep(1.2); q,o=S['polls'][st['poll']]
             r=run('TELEGRAM_SEND_POLL',{'chat_id':chat,'question':q,'options':o,'is_anonymous':True},tga); res=r['data']['result']['message_id']
+        elif st['type']=='tg_doc':
+            time.sleep(1.2); r=run('TELEGRAM_SEND_DOCUMENT',{'chat_id':chat,'document':url(st['file'])[0]},tga); res=r['data']['result']['message_id']
         elif st['type']=='ig_carousel':
             keys=[url(n+'.jpg')[1] for n in st['cards']]
             c=run('INSTAGRAM_CREATE_CAROUSEL_CONTAINER',{'ig_user_id':igid,'caption':txt(st),'child_image_files':[{'name':f'nova_{i+1}.jpg','mimetype':'image/jpeg','s3key':x} for i,x in enumerate(keys)]},iga); cid=c['data']['id']
