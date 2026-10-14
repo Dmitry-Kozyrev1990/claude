@@ -77,3 +77,15 @@ def test_build_on_imported_archive(tmp_path, monkeypatch):
     data = build.run("imported")
     assert data["meta"]["synthetic"] is False and data["pipeline"]["quality"] is None
     assert data["meta"]["licenses"] == ["Т-1"] and data["meta"]["counts"]["raw"] == 2
+
+
+def test_portfolio_on_demo_data():
+    from arttracker import build
+    d = build.run("demo")
+    p = d["portfolio"]
+    assert len(p["items"]) >= 5 and {i["market"] for i in p["items"]} == {"intl", "ru"}
+    assert p["timeline"][-1]["value"] == p["value"]          # линия приходит к текущей оценке
+    assert p["value_lo"] <= p["value"] <= p["value_hi"] == p["insurance"]
+    for i in p["items"]:
+        assert i["timeline"][int(i["bought_on"][:4])] == i["bought_usd"]  # старт — цена покупки
+        assert abs(i["gain"] - (i["value"]["p50"] / i["bought_usd"] - 1)) < 1e-3

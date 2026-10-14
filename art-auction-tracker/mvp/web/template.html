@@ -73,9 +73,38 @@ button, select, input { font: inherit; color: inherit; }
 .tab { border: 0; background: none; padding: 18px 12px 16px; cursor: pointer; color: var(--ink-2); white-space: nowrap; border-bottom: 2px solid transparent; font-weight: 500; font-size: 14px; }
 .tab:hover { color: var(--ink); }
 .tab[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); }
+@media (max-width: 1420px) { .brand span { display: none; } }
 .cur { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
 .cur button { border: 0; background: var(--surface); padding: 6px 11px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--ink-2); }
 .cur button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.planbar { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 10px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); }
+.planbar .pick { padding: 0; }
+.planbar .pick button { padding: 4px 11px; font-size: 13px; }
+.locked { position: relative; border-radius: var(--r); overflow: hidden; min-height: 150px; }
+.locked-in { filter: blur(7px); opacity: 0.5; pointer-events: none; user-select: none; }
+.lock-cta { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; text-align: center; padding: 16px; background: color-mix(in srgb, var(--surface) 45%, transparent); }
+.lock-cta b { font-family: var(--f-display); font-size: 18px; font-weight: 600; }
+.lock-cta span { color: var(--ink-2); font-size: 13px; max-width: 46ch; }
+.lock-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 1px 8px; white-space: nowrap; font-weight: 500; }
+.plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
+@media (max-width: 900px) { .plans { grid-template-columns: minmax(0, 1fr); } }
+.plan { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); padding: 20px; display: grid; gap: 12px; align-content: start; }
+.plan.main { border: 2px solid var(--accent); }
+.plan h3 { font-size: 20px; }
+.plan .price { font-family: var(--f-display); font-size: 34px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.plan .price small { font-family: var(--f-body); font-size: 14px; color: var(--muted); font-weight: 400; }
+.durations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.durations button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 10px; cursor: pointer; text-align: left; display: grid; gap: 1px; font-size: 13px; }
+.durations button b { font-variant-numeric: tabular-nums; }
+.durations button span { color: var(--muted); font-size: 12px; }
+.durations button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.ticks { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13.5px; color: var(--ink-2); }
+.ticks li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 6px; }
+.ticks li::before { content: "✓"; color: var(--accent); font-weight: 600; }
+.cmp td:not(:first-child), .cmp th:not(:first-child) { text-align: center; }
+.yes { color: var(--accent); font-weight: 600; }
+.no { color: var(--muted); }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--tip-bg); color: var(--tip-ink); padding: 10px 16px; border-radius: 10px; font-size: 13.5px; z-index: 50; max-width: calc(100% - 32px); }
 .geo { display: grid; gap: 6px; }
 .geo-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 200px; gap: 10px; align-items: center; font-size: 13px; }
 .geo-bar { display: flex; height: 18px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--surface); }
@@ -262,7 +291,9 @@ dl { margin: 0; }
   </div>
 </header>
 <div class="note"><p id="demo-note"><strong>Демо на синтетических данных.</strong> Художники реальные; торги, лоты и цены смоделированы генератором, чтобы показать работу конвейера на зарубежном и российском рынках. Курсы валют и ставки премий приближённые.</p></div>
+<div class="planbar" id="planbar"></div>
 <main id="view"></main>
+<div class="toast" id="toast" role="status" hidden></div>
 
 <script>const DATA = /*__DATA__*/null;</script>
 <script>
@@ -307,6 +338,7 @@ const STATUS = { sold: "продан", bought_in: "не продан", withdrawn
 const idxVal = (idx, y) => idx && idx[y] ? idx[y].value : null;
 const lastYear = idx => Math.max(...Object.keys(idx).map(Number));
 const today = DATA.meta.today;
+const RECENT = (+today.slice(0, 4) - 1) + today.slice(4);  // результаты последних 12 месяцев — в подписке
 
 /* ================= хранилище (только удобство) ================= */
 const store = {
@@ -442,8 +474,34 @@ function timelineChart(box, lots, fair) {
 
 /* ================= маршрутизация ================= */
 const ROUTES = [
-  ["market", "Рынок"], ["artist", "Художники"], ["work", "Работа"], ["value", "Оценка"], ["alerts", "Уведомления"], ["pipeline", "Как это работает"],
+  ["market", "Рынок"], ["artist", "Художники"], ["work", "Работа"], ["value", "Оценка"], ["cabinet", "Кабинет"],
+  ["alerts", "Уведомления"], ["pricing", "Тарифы"], ["pipeline", "Как это работает"],
 ];
+/* ---------- тарифы ---------- */
+const PLANS = {
+  free: { name: "Обзор", note: "бесплатно" },
+  collector: { name: "Коллекционер", durations: [["1 день", 890, 1 / 30], ["1 месяц", 3690, 1], ["6 месяцев", 8490, 6], ["12 месяцев", 11450, 12]] },
+  pro: { name: "Профи", durations: [["1 месяц", 7490, 1], ["12 месяцев", 49900, 12]] },
+};
+const RANK = { free: 0, collector: 1, pro: 2 };
+const NEED = {
+  recent_prices: "collector", artist_analytics: "collector", valuation: "collector", signals: "collector",
+  repeat_sales: "collector", portfolio: "collector", full_rating: "collector", instant_alerts: "collector",
+  reports: "pro", export: "pro", api: "pro",
+};
+let PLAN = store.get("plan", "collector");
+if (!PLANS[PLAN]) PLAN = "collector";
+const can = f => RANK[PLAN] >= RANK[NEED[f]];
+const perMonth = d => Math.round(d[1] / d[2]);
+const cheapest = plan => Math.min(...PLANS[plan].durations.filter(d => d[2] >= 1).map(perMonth));
+const offer = plan => `Тариф «${PLANS[plan].name}» — от ${nf.format(cheapest(plan))} ₽ в месяц при оплате за год`;
+const lock = (html, f, what) => can(f) ? html :
+  `<div class="locked"><div class="locked-in" aria-hidden="true" inert>${html}</div><div class="lock-cta"><b>${what}</b><span>${offer(NEED[f])}</span><button class="btn" data-go="pricing">Смотреть тарифы</button></div></div>`;
+const lockTag = f => `<span class="lock-tag" title="${esc(offer(NEED[f]))}">в подписке</span>`;
+function toast(msg) {
+  const t = document.getElementById("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 3500);
+}
 const state = {
   artist: store.get("artist", "banksy"),
   variant: store.get("variant", null),
@@ -460,6 +518,8 @@ const marketPick = () => `<div class="pick" role="group" aria-label="Рынок"
 document.addEventListener("click", ev => {
   const mb = ev.target.closest("[data-market]");
   if (mb) { state.market = mb.dataset.market; store.set("market", state.market); render(); return; }
+  const pb = ev.target.closest("[data-plan]");
+  if (pb) { PLAN = pb.dataset.plan; store.set("plan", PLAN); render(); if (pb.dataset.buy) toast(`Демо: тариф «${PLANS[PLAN].name}» включён, оплата не списывается`); return; }
   const cb = ev.target.closest("[data-cur]");
   if (cb) { CUR = cb.dataset.cur; store.set("cur", CUR); render(); }
 });
@@ -477,6 +537,7 @@ function route() {
 function go(name, arg) { location.hash = arg != null ? `${name}-${arg}` : name; }
 function render() {
   const name = route();
+  document.getElementById("planbar").innerHTML = `<span>Тариф (демо):</span><div class="pick" role="group" aria-label="Тариф">${Object.entries(PLANS).map(([k, p]) => `<button data-plan="${k}" aria-pressed="${PLAN === k}">${p.name}</button>`).join("")}</div><span class="muted">переключите, чтобы увидеть, что открыто в каждом тарифе</span>`;
   document.getElementById("cur-usd").setAttribute("aria-pressed", CUR === "USD");
   document.getElementById("cur-rub").setAttribute("aria-pressed", CUR === "RUB");
   document.getElementById("tabs").innerHTML = ROUTES.map(([k, t]) => `<button class="tab" data-go="${k}" ${k === name ? 'aria-current="page"' : ""}>${t}</button>`).join("");
@@ -563,6 +624,8 @@ function renderArtistsTable() {
     const { key, dir } = state.sort; const va = val(a, key), vb = val(b, key);
     return typeof va === "string" ? dir * va.localeCompare(vb) : dir * ((va ?? -1e9) - (vb ?? -1e9));
   });
+  const hidden = can("full_rating") ? 0 : Math.max(0, rows.length - 10);
+  if (hidden) rows.length = 10;
   document.getElementById("artists-table").innerHTML = `<table><thead><tr>${cols.map(([k, t, c]) => k === "spark" ? `<th>${t}</th>` :
     `<th class="sortable ${c || ""}" data-sort="${k}" ${state.sort.key === k ? `aria-sort="${state.sort.dir > 0 ? "ascending" : "descending"}"` : ""}>${t}${state.sort.key === k ? (state.sort.dir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}</tr></thead><tbody>${rows.map(a => `
     <tr class="link" data-go="artist" data-arg="${a.id}">
@@ -574,7 +637,7 @@ function renderArtistsTable() {
       <td class="r num">${share(a.liquidity.sell_through)}</td>
       <td class="r num">${share(a.bias.above)}</td>
       <td class="r num">${usd(a.turnover_12m, true)}</td>
-    </tr>`).join("")}</tbody></table>`;
+    </tr>`).join("")}${hidden ? `<tr><td colspan="8"><span class="lock-tag">в подписке</span> Ещё ${hidden} художников и сортировка по всем столбцам — ${esc(offer("collector"))}. <a href="#pricing">Тарифы</a></td></tr>` : ""}</tbody></table>`;
   document.querySelectorAll("#artists-table th[data-sort]").forEach(th => th.addEventListener("click", () => {
     const k = th.dataset.sort; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : (k === "name_ru" ? 1 : -1) }; renderArtistsTable();
   }));
@@ -591,16 +654,16 @@ PAGES.artist = () => {
   <section class="kpis">
     ${kpi(nf.format(Math.round(a.index[ly].value)), `Индекс ${ly}`, "2015 = 100")}
     ${kpi(pct(a.cagr_all), "Рост в год с 2015", `за 3 года: ${pct(a.cagr_3y)}`)}
-    ${kpi(a.liquidity.score + "<span class='muted' style='font-size:16px'> / 100</span>", "Ликвидность", `${nf.format(a.liquidity.lots_per_year)} лота в год, ${a.liquidity.houses} домов`)}
-    ${kpi(share(a.liquidity.sell_through), "Доля проданных", "за последние 3 года")}
-    ${kpi(pct(a.repeat.median_cagr), "Доходность перепродаж", `медиана по ${a.repeat.n} парам продаж`)}
+    ${can("artist_analytics") ? kpi(a.liquidity.score + "<span class='muted' style='font-size:16px'> / 100</span>", "Ликвидность", `${nf.format(a.liquidity.lots_per_year)} лота в год, ${a.liquidity.houses} домов`) : kpi(lockTag("artist_analytics"), "Ликвидность", "лотов в год, охват домов")}
+    ${can("artist_analytics") ? kpi(share(a.liquidity.sell_through), "Доля проданных", "за последние 3 года") : kpi(lockTag("artist_analytics"), "Доля проданных", "за последние 3 года")}
+    ${can("artist_analytics") ? kpi(pct(a.repeat.median_cagr), "Доходность перепродаж", `медиана по ${a.repeat.n} парам продаж`) : kpi(lockTag("artist_analytics"), "Доходность перепродаж", "по парам продаж одного экземпляра")}
   </section>
   <div class="grid-2">
     <section class="panel">
       <div class="panel-head"><h2>Индекс цен, 2015 = 100</h2><p>Полоса — 90% интервал</p></div>
       <div class="chart" id="ar-chart"></div>
     </section>
-    <section class="panel">
+    ${lock(`<section class="panel">
       <div class="panel-head"><h2>Цена молотка против эстимейта</h2></div>
       <p class="muted" style="font-size:13px">${b.n} лотов. Средняя цена молотка — ${b.mean_ratio ? Math.round(b.mean_ratio * 100) + "%" : "—"} от середины эстимейта.</p>
       <div class="bias" role="img" aria-label="Распределение результатов относительно эстимейта">
@@ -613,7 +676,7 @@ PAGES.artist = () => {
         <div><span><i class="hatch"></i>Не продан</span><b>${share(b.unsold)}</b></div>
       </div>
       <p class="muted" style="font-size:12.5px">Сравнение ведётся по цене молотка: эстимейт публикуется без премии покупателя.</p>
-    </section>
+    </section>`, "artist_analytics", "Точность эстимейтов и ликвидность")}
   </div>
   <section class="panel">
     <div class="panel-head"><h2>Работы в базе</h2><p>${a.variants.length} ${a.variants.length > 12 && !state.allWorks ? "· показаны 12 самых активных" : ""}. Варианты одной работы (состояния доски, издания) учитываются отдельно</p></div>
@@ -654,7 +717,7 @@ function lotsTable(lots, withWork) {
       <td class="num" style="white-space:nowrap">${fdate(l.d)}</td><td style="white-space:nowrap">${esc(HOUSES[l.h].name)}</td>
       <td><div class="cell-title">${withWork ? `<span>${esc(v ? varName(v) : l.t)}</span><small class="mono">${esc(l.t)}</small>` : `<span class="mono">${esc(l.t)}</span><small>${l.q ? "копия, не оригинал" : l.ed ? "экземпляр " + l.ed : ""}${l.inf ? "вариант определён по изображению" : ""}</small>`}</div></td>
       <td class="r num" style="white-space:nowrap">${estText(l)}</td>
-      <td class="r num">${l.tu ? usd(l.tu) : "—"}</td>
+      <td class="r num">${!l.tu ? "—" : (!can("recent_prices") && l.d >= RECENT) ? lockTag("recent_prices") : usd(l.tu)}</td>
       <td><span class="chip ${l.s === "sold" ? "" : "down"}">${STATUS[l.s]}</span></td></tr>`;
   }).join("")}</tbody></table></div>`;
 }
@@ -680,7 +743,7 @@ PAGES.work = () => {
     </section>
     <section class="panel">
       <div class="panel-head"><h2>Справедливая цена</h2></div>
-      ${val.p50 ? `<div><div class="big-value">${usd(val.p50)}</div><p class="muted">диапазон ${usd(val.p10)}–${usd(val.p90)} по ${val.n} аналогам, с премией</p></div>` : `<p class="muted">Недостаточно продаж.</p>`}
+      ${val.p50 ? (can("valuation") ? `<div><div class="big-value">${usd(val.p50)}</div><p class="muted">диапазон ${usd(val.p10)}–${usd(val.p90)} по ${val.n} аналогам, с премией</p></div>` : `<div>${lockTag("valuation")}<p class="muted">Справедливая цена по ${val.n} аналогам — ${esc(offer("collector"))}</p></div>`) : `<p class="muted">Недостаточно продаж.</p>`}
       <dl class="facts">
         <div><dt>Техника</dt><dd>${esc(MEDIUM[v.medium] || v.medium)}</dd></div>
         <div><dt>Размер листа</dt><dd class="num">${v.size ? `${String(v.size[0]).replace(".", ",")} × ${String(v.size[1]).replace(".", ",")} см` : "—"}</dd></div>
@@ -695,11 +758,11 @@ PAGES.work = () => {
     <div class="aliases">${Object.entries(sources).map(([t, hs]) => `<span class="alias" title="${esc([...hs].join(", "))}">${esc(t)}</span>`).join("")}</div>
   </section>
   ${museumPanel(state.variant)}
-  ${pairs.length ? `<section class="panel"><div class="panel-head"><h2>Повторные продажи одного экземпляра</h2><p>Основа для расчёта доходности</p></div>
+  ${pairs.length ? lock(`<section class="panel"><div class="panel-head"><h2>Повторные продажи одного экземпляра</h2><p>Основа для расчёта доходности</p></div>
     <div class="table-wrap"><table><thead><tr><th>Экземпляр</th><th>Первая продажа</th><th>Повторная</th><th class="r">Лет</th><th class="r">Доходность в год</th></tr></thead><tbody>${pairs.map(p => {
     const f = LOTS.get(p.from), t = LOTS.get(p.to);
     return `<tr><td>${f.ed ? "№ " + f.ed : "оттиск"}</td><td class="num">${usd(p.p0)} · ${esc(HOUSES[f.h].name)}, ${f.d.slice(0, 4)}</td><td class="num">${usd(p.p1)} · ${esc(HOUSES[t.h].name)}, ${t.d.slice(0, 4)}</td><td class="r num">${String(p.years).replace(".", ",")}</td><td class="r num ${p.cagr >= 0 ? "pos" : "neg"}">${pct(p.cagr)}</td></tr>`;
-  }).join("")}</tbody></table></div></section>` : ""}
+  }).join("")}</tbody></table></div></section>`, "repeat_sales", "Доходность владения конкретным экземпляром") : ""}
   <section class="panel"><div class="panel-head"><h2>Лоты</h2><p>${state.allLots ? lots.length : Math.min(12, lots.length)} из ${lots.length}</p></div>${lotsTable(state.allLots ? lots : lots.slice(0, 12), false)}
     ${lots.length > 12 ? `<button class="btn ghost" id="w-more" style="justify-self:start">${state.allLots ? "Свернуть" : "Показать все " + lots.length}</button>` : ""}</section>`;
 };
@@ -743,7 +806,7 @@ PAGES.value = () => {
       <div class="field" style="flex:1;min-width:220px"><label for="v-q">Сохранность</label><select id="v-q">${QUALITY.map(([q, t]) => `<option value="${q}" ${q === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
     </div>
   </section>
-  ${val.p50 ? `<div class="grid-2">
+  ${val.p50 ? lock(`<div style="display:grid;gap:18px"><div class="grid-2">
     <section class="panel">
       <p class="eyebrow">Справедливая стоимость, с премией покупателя</p>
       <div class="big-value">${usd(val.p50 * k)}</div>
@@ -764,7 +827,8 @@ PAGES.value = () => {
     <div class="table-wrap"><table><thead><tr><th>Дата</th><th>Дом</th><th class="r">Цена тогда</th><th class="r">Поправка рынка</th><th class="r">Цена сегодня</th></tr></thead><tbody>${comps.map(l => {
     const f = now / idxVal(a.index, +l.d.slice(0, 4));
     return `<tr class="link" data-go="work" data-arg="${VAR_IDS.indexOf(l.v)}"><td class="num">${fdate(l.d)}</td><td>${esc(HOUSES[l.h].name)}</td><td class="r num">${usd(l.tu)}</td><td class="r num">×${f.toFixed(2).replace(".", ",")}</td><td class="r num">${usd(l.tu * f)}</td></tr>`;
-  }).join("")}</tbody></table></div></section>` : `<section class="panel"><p class="empty">По этому варианту пока нет продаж для оценки.</p></section>`}`;
+  }).join("")}</tbody></table></div></section></div>`, "valuation", "Справедливая цена с аналогами") : `<section class="panel"><p class="empty">По этому варианту пока нет продаж для оценки.</p></section>`}
+  ${!can("valuation") ? `<p class="muted" style="font-size:13px">Без подписки можно купить одну оценку с аналогами за 490 ₽.</p>` : ""}`;
 };
 AFTER.value = () => {
   document.getElementById("v-artist").addEventListener("change", e => { state.valueVariant = ART[e.target.value].variants[0]; render(); });
@@ -791,7 +855,8 @@ function reasonFor(n) {
 }
 PAGES.alerts = () => {
   const own = OWN && VAR[OWN.variant];
-  const feed = DATA.alerts.notifications.map(n => ({ ...n, why: reasonFor(n) })).filter(n => n.why);
+  const fullFeed = DATA.alerts.notifications.map(n => ({ ...n, why: reasonFor(n) })).filter(n => n.why);
+  const feed = can("instant_alerts") ? fullFeed : fullFeed.slice(0, 2);
   const head = n => n.why === "similar" ? `Работа ${esc(ART[n.artist].name_ru)}, похожая на вашу, выставлена на торги` :
     n.why === "work" ? "Работа из избранного выставлена на торги" : `Новый лот: ${esc(ART[n.artist].name_ru)}`;
   return `
@@ -813,9 +878,10 @@ PAGES.alerts = () => {
       </section>
     </div>
     <section class="phone" aria-label="Лента уведомлений в Telegram">
-      <div class="bot"><div class="av">L</div><div><b>Lotline Bot</b><small>Telegram · ${feed.length} уведомлений о ближайших торгах</small></div></div>
+      <div class="bot"><div class="av">L</div><div><b>Lotline Bot</b><small>Telegram · ${can("instant_alerts") ? `${feed.length} уведомлений о ближайших торгах` : `бесплатно: дайджест раз в неделю, ${feed.length} из ${fullFeed.length}`}</small></div></div>
       ${feed.map(n => `<article class="msg"><span class="h">${head(n)}</span><span>${esc(n.body)}</span><span class="muted">${esc(n.fair)}</span>
-        <div class="meta">${sigChip(n.signal)}<time>${fdate(n.date)}</time></div></article>`).join("") || `<p class="empty">Под ваши фильтры ближайших лотов нет. Добавьте художника в избранное.</p>`}
+        <div class="meta">${can("signals") ? sigChip(n.signal) : lockTag("signals")}<time>${fdate(n.date)}</time></div></article>`).join("") || `<p class="empty">Под ваши фильтры ближайших лотов нет. Добавьте художника в избранное.</p>`}
+      ${!can("instant_alerts") && fullFeed.length > feed.length ? `<div class="msg"><span class="h">Ещё ${fullFeed.length - feed.length} уведомлений ждут в подписке</span><span class="muted">Мгновенно в Telegram, с сигналом «эстимейт ниже рынка». ${esc(offer("collector"))}.</span><button class="btn" data-go="pricing" style="justify-self:start">Тарифы</button></div>` : ""}
     </section>
   </div>
   <section class="panel"><div class="panel-head"><h2>Все предстоящие лоты</h2><p>Эстимейт с премией сравнивается со справедливой ценой</p></div>
@@ -823,12 +889,16 @@ PAGES.alerts = () => {
     const l = LOTS.get(u.lot), v = VAR[l.v];
     return `<tr ${v ? `class="link" data-go="work" data-arg="${VAR_IDS.indexOf(l.v)}"` : ""}><td class="num" style="white-space:nowrap">${fdate(l.d)}</td><td style="white-space:nowrap">${esc(HOUSES[l.h].name)}</td>
       <td><div class="cell-title"><span>${esc(v ? varName(v) : l.t)}</span><small>${esc(ART[l.a].name_ru)}</small></div></td>
-      <td class="r num" style="white-space:nowrap">${estText(l)}</td><td>${sigChip(u.signal)}</td></tr>`;
+      <td class="r num" style="white-space:nowrap">${estText(l)}</td><td>${can("signals") ? sigChip(u.signal) : lockTag("signals")}</td></tr>`;
   }).join("")}</tbody></table></div></section>`;
 };
 AFTER.alerts = () => {
   document.querySelectorAll("#watch-artists button").forEach(b => b.addEventListener("click", () => {
-    const id = b.dataset.a; state.watchArtists = state.watchArtists.includes(id) ? state.watchArtists.filter(x => x !== id) : [...state.watchArtists, id];
+    const id = b.dataset.a;
+    if (!state.watchArtists.includes(id) && !can("instant_alerts") && state.watchArtists.length >= 3) {
+      toast("В бесплатном тарифе — до 3 художников в избранном. В подписке — без ограничений."); return;
+    }
+    state.watchArtists = state.watchArtists.includes(id) ? state.watchArtists.filter(x => x !== id) : [...state.watchArtists, id];
     store.set("watchArtists", state.watchArtists); render();
   }));
   document.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", () => {
@@ -837,6 +907,146 @@ AFTER.alerts = () => {
   document.getElementById("add-work").addEventListener("change", e => {
     if (!e.target.value) return; state.watchWorks = [...state.watchWorks, e.target.value]; store.set("watchWorks", state.watchWorks); render();
   });
+};
+
+/* ================= Кабинет ================= */
+PAGES.cabinet = () => {
+  const P = DATA.portfolio, items = P.items, full = can("portfolio");
+  const shown = full ? items : items.slice(0, 3);
+  const rawUp = DATA.upcoming.filter(u => u.signal);
+  const below = rawUp.filter(u => u.signal.kind === "below_market").length;
+  const notes = DATA.alerts.notifications.filter(n => n.reason).length;
+  const sigName = { peak: "индекс у максимума", same: "такая же на торгах", similar: "похожие на торгах", illiquid: "низкая ликвидность" };
+  const rows = shown.map(i => {
+    const v = VAR[i.variant], a = ART[i.artist], alpha = i.cagr != null && i.index_cagr != null ? i.cagr - i.index_cagr : null;
+    return `<tr class="link" data-go="work" data-arg="${VAR_IDS.indexOf(i.variant)}">
+      <td><div class="cell-title"><span>${esc(v.title)}</span><small>${esc(a.name_ru)} · ${esc(MARKETS[i.market])}</small></div></td>
+      <td class="num" style="white-space:nowrap">${fdate(i.bought_on)}<br><small class="muted">${usd(i.bought_usd)}</small></td>
+      <td class="r num"><b>${usd(i.value.p50)}</b><br><small class="muted">${usd(i.value.p10, true)}–${usd(i.value.p90, true)}</small></td>
+      <td class="r num ${i.gain >= 0 ? "pos" : "neg"}">${full ? pct(i.gain) : lockTag("portfolio")}</td>
+      <td class="r num">${full ? `${pct(i.cagr)}<br><small class="${alpha >= 0 ? "pos" : "neg"}">${alpha == null ? "" : (alpha >= 0 ? "лучше" : "хуже") + " индекса на " + pct(Math.abs(alpha)).replace("+", "")}</small>` : lockTag("portfolio")}</td>
+      <td class="num">${full ? `<span class="meter"><i style="width:${i.liquidity}%"></i></span>${i.liquidity}` : lockTag("portfolio")}</td>
+      <td>${full ? i.signals.map(s => `<span class="chip ${s.kind === "illiquid" ? "sig-above" : s.kind === "peak" ? "sig-below" : "sig-in"}" title="${esc(s.text)}">${sigName[s.kind]}</span>`).join(" ") : lockTag("signals")}</td></tr>`;
+  }).join("");
+  const bars = obj => Object.entries(obj).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="bar-row"><span>${esc(MARKETS[k] || k)}</span><span class="b"><i style="width:${v / P.value * 100}%"></i></span><span class="num" style="text-align:right">${v / P.value < 0.01 ? "<1" : Math.round(v / P.value * 100)}%</span></div>`).join("");
+  return `
+  <section class="page-head"><p class="eyebrow">Личный кабинет · пример пользователя · тариф «${PLANS[PLAN].name}»</p><h1>Моя коллекция</h1>
+    <p>${items.length} работ на двух рынках. Стоимость считается по аналогам и индексу художника и обновляется после каждых торгов.</p></section>
+  <section class="kpis">
+    ${kpi(usd(P.value, true), "Стоимость сейчас", `диапазон ${usd(P.value_lo, true)}–${usd(P.value_hi, true)}`)}
+    ${kpi(usd(P.invested, true), "Вложено", "цены покупки с премией")}
+    ${full ? kpi(pct(P.gain), "Прибыль с покупки", usd(P.value - P.invested, true)) : kpi(lockTag("portfolio"), "Прибыль с покупки", "и доходность каждой работы")}
+    ${full ? kpi(usd(P.insurance, true), "Страховая стоимость", "верхняя граница оценки") : kpi(lockTag("portfolio"), "Страховая стоимость", "для полиса и залога")}
+    ${full ? kpi(P.liquidity + "<span class='muted' style='font-size:16px'> / 100</span>", "Ликвидность коллекции", "взвешено по стоимости") : kpi(lockTag("portfolio"), "Ликвидность коллекции", "как быстро можно продать")}
+  </section>
+  ${lock(`<section class="panel">
+    <div class="panel-head"><h2>Стоимость коллекции по годам</h2><p>Сравнение с вложенными деньгами</p></div>
+    <div class="legend"><span><i style="background:var(--s1)"></i>Стоимость</span><span style="color:var(--ink)"><i class="dash"></i><span style="color:var(--ink-2)">Вложено</span></span></div>
+    <div class="chart" id="pf-chart"></div>
+  </section>`, "portfolio", "Динамика стоимости коллекции")}
+  <section class="panel">
+    <div class="panel-head"><h2>Работы</h2><p>${full ? "Нажмите на строку, чтобы открыть историю продаж" : "Бесплатно — до 3 работ и только стоимость"}</p></div>
+    <div class="table-wrap"><table><thead><tr><th>Работа</th><th>Покупка</th><th class="r">Стоимость сейчас</th><th class="r">Прибыль</th><th class="r">Доходность в год</th><th>Ликвидность</th><th>Сигналы</th></tr></thead><tbody>${rows}
+    ${!full && items.length > 3 ? `<tr><td colspan="7"><span class="lock-tag">в подписке</span> Ещё ${items.length - 3} работы: коллекция без ограничений — ${esc(offer("collector"))}. <a href="#pricing">Тарифы</a></td></tr>` : ""}</tbody></table></div>
+  </section>
+  <div class="grid-2e">
+    ${lock(`<section class="panel"><div class="panel-head"><h2>Структура коллекции</h2><p>Доля стоимости</p></div>
+      <h3>По рынкам</h3><div class="bars">${bars(P.by_market)}</div>
+      <h3>По сегментам</h3><div class="bars">${bars(P.by_segment)}</div></section>`, "portfolio", "Структура и концентрация")}
+    <section class="panel"><div class="panel-head"><h2>Что подписка дала за месяц</h2><p>Пример для удержания: показываем в письме и в кабинете</p></div>
+      <div class="flow">
+        <div><b>${notes}</b><span>уведомлений о работах из избранного и похожих на вашу коллекцию</span></div>
+        <div><b>${below}</b><span>лотов на ближайших торгах с эстимейтом ниже рынка</span></div>
+        <div><b>${P.signals}</b><span>сигналов по вашей коллекции</span></div>
+      </div>
+    </section>
+  </div>
+  ${lock(`<section class="panel"><div class="panel-head"><h2>Отчёт об оценке для банка или страховой</h2><p>Тариф «Профи»: PDF с методикой и аналогами</p></div>
+    <div class="table-wrap"><table><thead><tr><th>Работа</th><th class="r">Нижняя граница</th><th class="r">Оценка</th><th class="r">Верхняя граница</th><th class="r">Аналогов</th></tr></thead><tbody>${items.map(i => `<tr><td>${esc(VAR[i.variant].title)} · ${esc(ART[i.artist].name_ru)}</td><td class="r num">${usd(i.value.p10)}</td><td class="r num">${usd(i.value.p50)}</td><td class="r num">${usd(i.value.p90)}</td><td class="r num">${VAR[i.variant].valuation.n}</td></tr>`).join("")}</tbody></table></div>
+    <p class="muted" style="font-size:12.5px">Методика: продажи того же варианта работы, приведённые к текущему уровню рынка по индексу художника; цены с премией покупателя; дата оценки ${fdate(today)}.</p>
+  </section>`, "reports", "Отчёт для залога и страхования")}`;
+};
+AFTER.cabinet = () => {
+  const box = document.getElementById("pf-chart"); if (!box) return;
+  const t = DATA.portfolio.timeline;
+  lineChart(box, {
+    series: [{ name: "Вложено", color: "var(--ink)", pts: t.map(r => ({ x: r.year, y: r.invested })), dash: true, width: 1.5, label: "вложено" },
+    { name: "Стоимость", color: "var(--s1)", pts: t.map(r => ({ x: r.year, y: r.value })), label: "стоимость" }],
+    height: 260, yFmt: v => usd(v, true), tipTitle: x => `${x} год`,
+  });
+};
+
+/* ================= Тарифы ================= */
+const FEATURES = [
+  ["Рынок и индексы", [
+    ["Индексы рынков и сегментов", "да", "да", "да"],
+    ["Рейтинг художников", "топ-10", "все художники", "все + выгрузка"],
+    ["Карточки художников: индекс", "да", "да, с интервалом", "да"],
+    ["Ликвидность, доля продаж, точность эстимейтов", "—", "да", "да"],
+  ]],
+  ["Результаты торгов", [
+    ["Цены продаж", "старше 12 месяцев", "все", "все"],
+    ["История продаж экземпляра и доходность владения", "—", "да", "да"],
+    ["Эталон в музейных коллекциях", "да", "да", "да"],
+    ["Выгрузка в Excel и API", "—", "—", "да"],
+  ]],
+  ["Оценка", [
+    ["Справедливая цена с аналогами", "490 ₽ за оценку", "без ограничений", "без ограничений"],
+    ["Отчёт для банка или страховой (PDF)", "—", "—", "да"],
+  ]],
+  ["Кабинет и уведомления", [
+    ["Моя коллекция", "до 3 работ, стоимость", "без ограничений, доходность, ликвидность, сигналы", "несколько коллекций клиентов"],
+    ["Избранное", "до 3 художников", "без ограничений", "без ограничений"],
+    ["Уведомления", "дайджест раз в неделю", "мгновенно в Telegram и на почту", "+ правила по цене"],
+    ["Сигнал «эстимейт ниже рынка»", "—", "да", "да"],
+  ]],
+];
+state.duration = state.duration ?? 3;
+PAGES.pricing = () => {
+  const c = PLANS.collector, d = c.durations[state.duration], monthly = c.durations[1][1];
+  const saving = d[2] >= 1 ? 1 - d[1] / (monthly * d[2]) : null;
+  const pro = PLANS.pro;
+  const cell = v => v === "да" ? '<span class="yes">✓</span>' : v === "—" ? '<span class="no">—</span>' : esc(v);
+  return `
+  <section class="page-head"><p class="eyebrow">Тарифы</p><h1>Безлимитный доступ к аналитике от ${nf.format(perMonth(c.durations[3]))} ₽ в месяц</h1>
+    <p>Рынок и индексы открыты бесплатно. Подписка открывает цены последних 12 месяцев, оценку с аналогами, аналитику коллекции и мгновенные уведомления.</p></section>
+  <div class="plans">
+    <section class="plan">
+      <h3>Обзор</h3><div class="price">0 ₽</div>
+      <ul class="ticks"><li>Индексы рынков и сегментов</li><li>Топ-10 художников</li><li>Цены продаж старше 12 месяцев</li><li>Коллекция до 3 работ и избранное до 3 художников</li><li>Дайджест раз в неделю</li></ul>
+      <button class="btn ghost" data-plan="free" data-buy="1">Пользоваться бесплатно</button>
+    </section>
+    <section class="plan main">
+      <h3>Коллекционер</h3>
+      <div class="durations" role="group" aria-label="Срок подписки">${c.durations.map((x, i) => `<button data-dur="${i}" aria-pressed="${i === state.duration}"><b>${nf.format(x[1])} ₽</b><span>${x[0]}${x[2] >= 1 && x[2] > 1 ? ` · ${nf.format(perMonth(x))} ₽/мес` : ""}</span></button>`).join("")}</div>
+      <div class="price">${nf.format(d[1])} ₽ <small>за ${d[0]}</small></div>
+      <p class="muted" style="font-size:13px">${saving && saving > 0.01 ? `Экономия ${Math.round(saving * 100)}% по сравнению с помесячной оплатой.` : d[2] < 1 ? "Полный доступ на сутки: перед торгами или покупкой." : "Можно отменить в любой момент."}</p>
+      <ul class="ticks"><li>Все цены продаж и история экземпляров</li><li>Оценка с аналогами без ограничений</li><li>Коллекция: доходность, ликвидность, страховая стоимость, сигналы</li><li>Мгновенные уведомления в Telegram, сигнал «эстимейт ниже рынка»</li><li>Ликвидность и точность эстимейтов по художникам</li></ul>
+      <button class="btn" data-plan="collector" data-buy="1">Оформить за ${nf.format(d[1])} ₽</button>
+    </section>
+    <section class="plan">
+      <h3>Профи</h3><div class="price">${nf.format(pro.durations[0][1])} ₽ <small>в месяц</small></div>
+      <p class="muted" style="font-size:13px">или ${nf.format(pro.durations[1][1])} ₽ за год (${nf.format(perMonth(pro.durations[1]))} ₽/мес). Для дилеров, галерей, консультантов.</p>
+      <ul class="ticks"><li>Всё из «Коллекционера»</li><li>Отчёты об оценке для банков и страховых (PDF)</li><li>Несколько коллекций клиентов</li><li>Выгрузка в Excel и API</li><li>Правила уведомлений по цене</li></ul>
+      <button class="btn ghost" data-plan="pro" data-buy="1">Оформить «Профи»</button>
+    </section>
+  </div>
+  <section class="panel">
+    <div class="panel-head"><h2>Что входит в тарифы</h2></div>
+    <div class="table-wrap"><table class="cmp"><thead><tr><th></th><th>Обзор</th><th>Коллекционер</th><th>Профи</th></tr></thead><tbody>${FEATURES.map(([g, rows]) => `<tr><td colspan="4"><b>${g}</b></td></tr>` + rows.map(r => `<tr><td>${esc(r[0])}</td><td>${cell(r[1])}</td><td>${cell(r[2])}</td><td>${cell(r[3])}</td></tr>`).join("")).join("")}</tbody></table></div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Разовые покупки и бизнес</h2></div>
+    <ul class="list">
+      <li><strong>Оценка одной работы с аналогами — 490 ₽.</strong> Для тех, кому нужна одна цена, без подписки.</li>
+      <li><strong>Отчёт для банка или страховой — 2 990 ₽.</strong> PDF с методикой, аналогами и диапазоном.</li>
+      <li><strong>Банки, страховые, лизинг.</strong> API оценки залогов и мониторинг портфеля — по договору.</li>
+    </ul>
+    <p class="muted" style="font-size:12.5px">Демо: кнопки включают тариф на этой странице, оплата не списывается. В продукте оплата через ЮKassa или CloudPayments с чеками по 54-ФЗ.</p>
+  </section>`;
+};
+AFTER.pricing = () => {
+  document.querySelectorAll("[data-dur]").forEach(b => b.addEventListener("click", () => { state.duration = +b.dataset.dur; render(); }));
 };
 
 /* ================= Как это работает ================= */
