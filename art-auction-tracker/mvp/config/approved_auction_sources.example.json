@@ -1,0 +1,12 @@
+[
+  {
+    "id": "example-house",
+    "name": "Пример аукционного дома",
+    "domains": ["example-auctions.com"],
+    "terms_url": "https://example-auctions.com/terms",
+    "reviewed_on": "2026-10-14",
+    "review_note": "Условия не запрещают автоматический сбор публичных результатов; письменное разрешение от 2026-10-10",
+    "license": "по письменному разрешению",
+    "min_interval": 10
+  }
+]

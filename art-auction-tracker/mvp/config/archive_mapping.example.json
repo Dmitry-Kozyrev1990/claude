@@ -1,0 +1,46 @@
+{
+  "_как_заполнить": "Скопируйте файл, укажите данные дома и договора. Ключи columns — поля конвейера, значения — названия колонок в архиве партнёра. Без заполненного блока license импорт не выполняется.",
+  "source_id": "partner_house",
+  "house": {
+    "name": "Название дома",
+    "city": "Москва",
+    "currency": "RUB",
+    "premium": 0.15,
+    "price_mode": "hammer",
+    "lang": "ru",
+    "region": "ru"
+  },
+  "license": {
+    "agreement": "",
+    "signed_on": "",
+    "scope": "",
+    "attribution": ""
+  },
+  "encoding": "utf-8-sig",
+  "delimiter": ";",
+  "date_format": "%d.%m.%Y",
+  "columns": {
+    "sale_id": "Код торгов",
+    "sale_title": "Название торгов",
+    "sale_date": "Дата торгов",
+    "lot_number": "Номер лота",
+    "artist_raw": "Автор",
+    "title_raw": "Название",
+    "date_raw": "Год создания",
+    "medium_raw": "Техника",
+    "dimensions_raw": "Размер",
+    "estimate_low": "Эстимейт от",
+    "estimate_high": "Эстимейт до",
+    "price": "Цена продажи",
+    "currency": "Валюта",
+    "status": "Статус",
+    "image_url": "Изображение",
+    "provenance": "Провенанс",
+    "literature": "Литература"
+  },
+  "status_values": {
+    "продан": "sold",
+    "не продан": "bought_in",
+    "снят": "withdrawn"
+  }
+}

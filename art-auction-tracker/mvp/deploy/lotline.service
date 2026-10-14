@@ -1,0 +1,15 @@
+# Вариант без Docker: systemd-сервис. Скопировать в /etc/systemd/system/lotline.service,
+# затем: systemctl daemon-reload && systemctl enable --now lotline
+[Unit]
+Description=Lotline
+After=network.target
+
+[Service]
+User=lotline
+WorkingDirectory=/opt/lotline/art-auction-tracker/mvp
+EnvironmentFile=/opt/lotline/art-auction-tracker/mvp/.env
+ExecStart=/opt/lotline/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
