@@ -14,7 +14,7 @@
 ```bash
 pip install -r requirements.txt
 python -m arttracker.build     # генерирует данные, прогоняет конвейер, собирает web/index.html
-python -m pytest -q            # 22 теста
+python -m pytest -q            # 31 тест
 ```
 
 `web/index.html` — самодостаточная страница: данные внутри, открывается в браузере без сервера.
@@ -55,6 +55,42 @@ python -m pytest -q            # 22 теста
 6. **«Как это работает»** — доказательство: тот же оттиск в каталогах четырёх домов, поля
    после нормализации, метрики сопоставления, очередь проверки, проверка индекса против
    заложенного.
+
+## Сбор из открытых источников
+
+```bash
+python -m arttracker.collect status      # реестр источников и их юридический статус
+python -m arttracker.collect artists     # Wikidata: имена на языках, годы жизни, ID ULAN
+python -m arttracker.collect works       # Art Institute of Chicago и The Met: эталонные карточки и фото
+python -m arttracker.collect fx          # ECB: ежедневные курсы валют
+python -m arttracker.collect lots urls.txt   # лоты со страниц одобренных аукционных сайтов (JSON-LD)
+```
+
+После сбора `python -m arttracker.build` сам подхватывает справочники: курсы ECB заменяют
+приближённые, имена из Wikidata пополняют словарь художников.
+
+Правила сборщика (`arttracker/sources/base.py`): источник должен быть одобрен в реестре,
+`robots.txt` проверяется до запроса, не чаще одного запроса в 1–5 секунд на хост, бот
+представляется в User-Agent, каждый ответ сохраняется в `data/raw/`.
+
+| Статус | Источники |
+|---|---|
+| одобрено | Wikidata, Art Institute of Chicago, The Met, ECB |
+| ждут проверки условий или разрешения | Christie's, Sotheby's, Phillips, Bonhams, Dorotheum, Heritage, Invaluable, LiveAuctioneers, Artsy, MutualArt |
+| не подключаются | Artprice (платная база) |
+
+Аукционный сайт включается после проверки условий: запись в
+`config/approved_auction_sources.json` (образец рядом, `.example.json`). Заблокированный в
+реестре источник конфигурацией не включить.
+
+Структура продукта по образцу ценовых баз и соответствие таблицам —
+[`docs/REFERENCE_STRUCTURE.md`](docs/REFERENCE_STRUCTURE.md), схема PostgreSQL —
+[`docs/schema.sql`](docs/schema.sql).
+
+**Сеть.** В облачном окружении, где собирался MVP, внешние домены закрыты, поэтому
+сборщики проверены на образцах ответов (`tests/test_sources.py`). Для живого сбора нужны
+домены: `query.wikidata.org`, `api.artic.edu`, `www.artic.edu`,
+`collectionapi.metmuseum.org`, `data-api.ecb.europa.eu`.
 
 ## Что смоделировано и что нужно для продукта
 

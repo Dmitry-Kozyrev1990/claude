@@ -4,6 +4,9 @@
 торги в демо синтетические — их создаёт generate.py.
 """
 
+import json
+from pathlib import Path
+
 ARTISTS = {
     "rembrandt": {
         "name": "Rembrandt Harmensz. van Rijn", "name_ru": "Рембрандт",
@@ -86,6 +89,22 @@ FX_TO_USD = {
     "EUR": {2015: 1.11, 2016: 1.11, 2017: 1.13, 2018: 1.18, 2019: 1.12, 2020: 1.14,
             2021: 1.18, 2022: 1.05, 2023: 1.08, 2024: 1.08, 2025: 1.13, 2026: 1.16},
 }
+
+
+REFERENCE_DIR = Path(__file__).resolve().parent.parent / "data" / "reference"
+
+
+def _load_ecb_rates():
+    """Если собраны курсы ECB (python -m arttracker.collect fx), они заменяют приближённые."""
+    path = REFERENCE_DIR / "fx.json"
+    if not path.exists():
+        return
+    annual = json.loads(path.read_text(encoding="utf-8")).get("annual", {})
+    for cur, table in annual.items():
+        FX_TO_USD.setdefault(cur, {}).update({int(y): float(v) for y, v in table.items()})
+
+
+_load_ecb_rates()
 
 
 def fx(currency: str, year: int) -> float:

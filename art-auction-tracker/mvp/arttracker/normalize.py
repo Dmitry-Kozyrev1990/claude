@@ -1,11 +1,12 @@
 """Нормализация сырых лотов: из текста разных домов — в единые поля."""
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from dataclasses import asdict, dataclass
 
-from .catalog import ARTISTS, HOUSES, fx
+from .catalog import ARTISTS, HOUSES, REFERENCE_DIR, fx
 
 QUALIFIERS = [
     (r"^(after|nach|d'après|d’après)\s+", "after"),
@@ -32,6 +33,13 @@ def _artist_keys():
     for aid, a in ARTISTS.items():
         for name in [a["name"], *a["aliases"]]:
             keys[" ".join(tokens(name))] = aid
+    # Имена и псевдонимы из Wikidata (python -m arttracker.collect artists), если собраны.
+    ref = REFERENCE_DIR / "artists.json"
+    if ref.exists():
+        for r in json.loads(ref.read_text(encoding="utf-8")):
+            if r.get("artist_id"):
+                for name in [r["name"], *r.get("labels", {}).values(), *r.get("aliases", [])]:
+                    keys.setdefault(" ".join(tokens(name)), r["artist_id"])
     return keys
 
 
