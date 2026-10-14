@@ -10,13 +10,26 @@
 > механику без нарушения условий использования сайтов аукционных домов. Курсы валют и
 > ставки премий приближённые.
 
-## Запуск
+## Сайт с аккаунтами и подписками
+
+Серверное приложение (`app/`): регистрация и вход, тарифы «Обзор / Коллекционер / Профи» с
+ценами, личный кабинет со своей коллекцией и избранным, закрытые данные вырезаются на
+сервере, оплата — тестовая активация (ЮKassa подключается позже), администрирование.
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
+LOTLINE_SECRET=dev LOTLINE_ADMIN_EMAILS=you@mail.ru uvicorn app.main:app --reload   # http://localhost:8000
+```
+
+Выложить на сервер: [`DEPLOY.md`](DEPLOY.md) — Docker, HTTPS через Caddy, пошагово.
+
+## Запуск статического демо
+
+```bash
+pip install -r requirements-dev.txt
 python -m arttracker.build                     # демо: генерирует данные, прогоняет конвейер → web/index.html
 python -m arttracker.build --source imported   # реальные архивы партнёров → web/real.html
-python -m pytest -q                            # 48 тестов
+python -m pytest -q                            # 54 теста
 ```
 
 `web/index.html` — самодостаточная страница: данные внутри, открывается в браузере без сервера.

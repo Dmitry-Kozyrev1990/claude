@@ -1,0 +1,31 @@
+# Запуск: cp .env.example .env, заполнить, затем docker compose up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - lotline-data:/data          # база пользователей и подписок
+    expose:
+      - "8000"
+
+  # Caddy принимает запросы из интернета и сам получает HTTPS-сертификат для домена.
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  lotline-data:
+  caddy-data:
+  caddy-config:

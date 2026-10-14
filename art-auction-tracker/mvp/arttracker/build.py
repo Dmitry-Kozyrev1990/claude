@@ -202,8 +202,6 @@ def run(source: str = "demo") -> dict:
     # 4. Предстоящие торги и уведомления
     upcoming = [l for l in lots if l.status == "upcoming"]
     alerts = build_alerts(upcoming, variants, valuations, m, emb, lots_by_variant)
-    from .portfolio import build_portfolio
-    portfolio = build_portfolio(variants, lots_by_variant, artists_out, upcoming, m, TODAY)
     upcoming_out = []
     for l in sorted(upcoming, key=lambda l: l.sale_date):
         vid = m.variant_of[l.lot_id]
@@ -272,13 +270,15 @@ def run(source: str = "demo") -> dict:
         "repeat_pairs": repeat_sales(past, m),
         "upcoming": upcoming_out,
         "alerts": alerts,
-        "portfolio": portfolio,
+
         "pipeline": {
             "coverage": coverage, "blocks": m.blocks, "pairs_compared": m.pairs_compared,
             "pairs_naive": n * (n - 1) // 2, "review_queue": len(m.review_queue), "review": review,
             "quality": quality, "variant_inferred": len(m.variant_inferred),
         },
     }
+    from .portfolio import compute, example_specs
+    data["portfolio"] = compute(data, example_specs(variants, lots_out), TODAY)
     return data
 
 

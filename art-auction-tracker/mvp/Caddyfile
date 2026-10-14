@@ -1,0 +1,5 @@
+# DOMAIN из .env: «lotline.example.ru» — с HTTPS; «:80» — без домена, по IP и HTTP.
+{$DOMAIN} {
+	encode gzip zstd
+	reverse_proxy app:8000
+}
