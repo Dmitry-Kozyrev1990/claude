@@ -36,7 +36,10 @@ Artprice, Artsy Price Database и MutualArt используются **толь�
 | Данные | Источник | Статус |
 |---|---|---|
 | Художники, имена на языках, годы жизни, ID ULAN | Wikidata (CC0), Getty ULAN (ODC-By) | одобрено |
-| Эталонные карточки работ и изображения | Art Institute of Chicago API (CC0), The Met Open Access (CC0) | одобрено |
+| Эталонные карточки работ и изображения | Art Institute of Chicago, The Met (адаптеры есть); Cleveland, Smithsonian, National Gallery of Art, MoMA (CC0, адаптеры в планах) | одобрено |
+| Эталон, изображения, провенанс | Rijksmuseum, Europeana, Harvard, V&A | проверить условия API |
+| Аукционные дома, музеи, коллекции банков, частные коллекции по миру | поиск в Wikidata (`collect discover`) | все кандидаты ждут проверки условий |
+| Результаты торгов тысяч небольших домов | агрегаторы: the-saleroom, Lot-tissimo, Drouot, Interencheres, Catawiki, Bidspirit, Invaluable, LiveAuctioneers | ждут проверки условий; лучше партнёрство |
 | Курсы валют | ECB Data Portal | одобрено |
 | Результаты торгов | сайты аукционных домов и площадок | по одному после проверки условий: `config/approved_auction_sources.json` |
 | Результаты торгов | Artsy, MutualArt | ждут проверки условий или разрешения |

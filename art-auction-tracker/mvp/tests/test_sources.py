@@ -140,3 +140,30 @@ def test_approved_config_cannot_unblock(tmp_path, monkeypatch):
     ids = [p.id for p in registry.approved_auction_sources()]
     assert ids == ["house"]
     assert registry.get("house").min_interval == 5.0   # не чаще раза в 5 секунд, даже если указано меньше
+
+
+def test_discovery_parsing_and_registry_counts(tmp_path, monkeypatch):
+    from arttracker.sources.discovery import CATEGORIES, discovery_query, parse_discovery
+    payload = {"results": {"bindings": [
+        {"item": {"value": "http://www.wikidata.org/entity/Q1"}, "itemLabel": {"value": "Dorotheum"},
+         "countryLabel": {"value": "Austria"}, "cityLabel": {"value": "Vienna"}},
+        {"item": {"value": "http://www.wikidata.org/entity/Q1"}, "itemLabel": {"value": "Dorotheum"},
+         "website": {"value": "https://www.dorotheum.com/"}},
+        {"item": {"value": "http://www.wikidata.org/entity/Q2"}, "itemLabel": {"value": "Q2"}},  # без названия
+    ]}}
+    [c] = parse_discovery("auction_house", payload)
+    assert (c.name, c.city, c.website, c.status) == ("Dorotheum", "Vienna", "https://www.dorotheum.com/", "pending_review")
+    for cat in CATEGORIES:
+        assert "LIMIT 100 OFFSET 200" in discovery_query(cat, 100, 200)
+    cands = tmp_path / "c.jsonl"
+    cands.write_text(json.dumps({"category": "art_museum", "wikidata_id": "Q3", "name": "M",
+                                 "country": None, "city": None, "website": None, "status": "pending_review"}) + "\n")
+    monkeypatch.setattr(registry, "CANDIDATES", cands)
+    assert registry.discovered_candidates()[0]["category"] == "art_museum"
+
+
+def test_registry_covers_aggregators_and_open_museums():
+    r = registry.REGISTRY
+    assert {"the-saleroom", "drouot", "catawiki", "lot-tissimo"} <= set(r)
+    assert all(r[k].status == "approved" for k in ("cleveland", "smithsonian", "nga", "moma"))
+    assert all(p.status != "approved" for p in r.values() if p.kind == "auction")

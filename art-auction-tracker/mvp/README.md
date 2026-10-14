@@ -14,7 +14,7 @@
 ```bash
 pip install -r requirements.txt
 python -m arttracker.build     # генерирует данные, прогоняет конвейер, собирает web/index.html
-python -m pytest -q            # 31 тест
+python -m pytest -q            # 33 теста
 ```
 
 `web/index.html` — самодостаточная страница: данные внутри, открывается в браузере без сервера.
@@ -63,6 +63,7 @@ python -m arttracker.collect status      # реестр источников и 
 python -m arttracker.collect artists     # Wikidata: имена на языках, годы жизни, ID ULAN
 python -m arttracker.collect works       # Art Institute of Chicago и The Met: эталонные карточки и фото
 python -m arttracker.collect fx          # ECB: ежедневные курсы валют
+python -m arttracker.collect discover    # Wikidata: аукционные дома, музеи, коллекции банков и частные коллекции
 python -m arttracker.collect lots urls.txt   # лоты со страниц одобренных аукционных сайтов (JSON-LD)
 ```
 
@@ -75,9 +76,16 @@ python -m arttracker.collect lots urls.txt   # лоты со страниц од
 
 | Статус | Источники |
 |---|---|
-| одобрено | Wikidata, Art Institute of Chicago, The Met, ECB |
-| ждут проверки условий или разрешения | Christie's, Sotheby's, Phillips, Bonhams, Dorotheum, Heritage, Invaluable, LiveAuctioneers, Artsy, MutualArt |
+| одобрено | Wikidata, ECB; музеи с открытыми данными: Art Institute of Chicago, The Met, Cleveland, Smithsonian, National Gallery of Art, MoMA |
+| ждут проверки условий или разрешения | Christie's, Sotheby's, Phillips, Bonhams, Dorotheum, Heritage; площадки Invaluable, LiveAuctioneers, the-saleroom, Lot-tissimo, Drouot, Interencheres, Catawiki, Bidspirit; Artsy, MutualArt; музеи Rijksmuseum, Europeana, Harvard, V&A; все кандидаты из `discover` |
 | не подключаются | Artprice (платная база) |
+
+`discover` ищет в Wikidata аукционные дома, художественные музеи, коллекции банков и частные
+коллекции по всему миру с сайтом, страной и городом и пишет их в
+`data/reference/source_candidates.jsonl`. Сколько найдётся, станет известно после первого
+запуска: охват Wikidata неполный, тысячи небольших домов доступны через агрегаторы из
+реестра. Цен у музеев и коллекций обычно нет — они дают эталонные карточки, изображения и
+провенанс.
 
 Аукционный сайт включается после проверки условий: запись в
 `config/approved_auction_sources.json` (образец рядом, `.example.json`). Заблокированный в
@@ -90,7 +98,8 @@ python -m arttracker.collect lots urls.txt   # лоты со страниц од
 **Сеть.** В облачном окружении, где собирался MVP, внешние домены закрыты, поэтому
 сборщики проверены на образцах ответов (`tests/test_sources.py`). Для живого сбора нужны
 домены: `query.wikidata.org`, `api.artic.edu`, `www.artic.edu`,
-`collectionapi.metmuseum.org`, `data-api.ecb.europa.eu`.
+`collectionapi.metmuseum.org`, `data-api.ecb.europa.eu`; для музеев, у которых адаптер ещё не
+написан, — `openaccess-api.clevelandart.org`, `api.si.edu`, `raw.githubusercontent.com`.
 
 ## Что смоделировано и что нужно для продукта
 

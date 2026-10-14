@@ -4,6 +4,7 @@
     python -m arttracker.collect artists                # справочник художников из Wikidata
     python -m arttracker.collect works                  # эталонные карточки работ (AIC и The Met)
     python -m arttracker.collect fx                     # курсы валют ECB
+    python -m arttracker.collect discover               # поиск аукционных домов, музеев и коллекций в Wikidata
     python -m arttracker.collect lots URL_FILE          # лоты со страниц одобренных аукционных сайтов
 
 Результаты пишутся в data/reference/ и data/collected_lots.jsonl. Конвейер
@@ -14,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -21,6 +23,7 @@ from .catalog import ARTISTS
 from .sources import registry
 from .sources.adapters import fetch_artists, fetch_fx, parse_lot_page, search_artic, search_met
 from .sources.base import PoliteClient, SourceNotAllowed
+from .sources.discovery import CATEGORIES, discover
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 REF = DATA / "reference"
@@ -40,6 +43,10 @@ def save(path: Path, data):
     print(f"→ {path.relative_to(DATA.parent)}")
 
 
+CATEGORY_RU = {"auction_house": "Аукционные дома", "art_museum": "Художественные музеи",
+               "bank_collection": "Коллекции банков", "private_collection": "Частные коллекции"}
+
+
 def cmd_status(_):
     rows = list(registry.REGISTRY.values()) + registry.approved_auction_sources()
     for p in rows:
@@ -47,6 +54,27 @@ def cmd_status(_):
         print(f"{mark} {p.id:<16} {p.kind:<10} {p.status:<15} {p.license}")
         if p.note:
             print(f"  {p.note}")
+    cands = registry.discovered_candidates()
+    if cands:
+        counts = Counter(c["category"] for c in cands)
+        print("\nНайдено через Wikidata (ждут проверки): " + ", ".join(
+            f"{CATEGORY_RU.get(k, k).lower()} — {v}" for k, v in counts.items()))
+    else:
+        print("\nКандидаты из Wikidata ещё не собраны: python -m arttracker.collect discover")
+
+
+def cmd_discover(args):
+    cands = discover(PoliteClient(registry.get("wikidata")), args.category or None, max_pages=args.max_pages)
+    path = registry.CANDIDATES
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        for c in cands:
+            f.write(json.dumps(c, ensure_ascii=False) + "\n")
+    counts = Counter(c["category"] for c in cands)
+    with_site = Counter(c["category"] for c in cands if c["website"])
+    for cat in CATEGORIES:
+        print(f"{CATEGORY_RU[cat]:<26} {counts[cat]:>6}, с сайтом: {with_site[cat]}")
+    print(f"→ {path.relative_to(DATA.parent)} (все в статусе «ждёт проверки условий»)")
 
 
 def cmd_artists(_):
@@ -120,6 +148,10 @@ def main(argv=None):
     w.add_argument("--limit-queries", type=int, default=len(WORK_QUERIES))
     w.set_defaults(fn=cmd_works)
     sub.add_parser("fx").set_defaults(fn=cmd_fx)
+    d = sub.add_parser("discover")
+    d.add_argument("--category", action="append", choices=list(CATEGORIES))
+    d.add_argument("--max-pages", type=int, default=20)
+    d.set_defaults(fn=cmd_discover)
     lots = sub.add_parser("lots")
     lots.add_argument("url_file")
     lots.set_defaults(fn=cmd_lots)

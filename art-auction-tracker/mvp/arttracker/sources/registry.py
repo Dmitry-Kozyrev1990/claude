@@ -61,6 +61,42 @@ REGISTRY: dict[str, SourcePolicy] = {p.id: p for p in [
         ["mutualart.com"], min_interval=5.0,
         note="Прямой конкурент по функции Watchlist. Используется как образец структуры; данные — только "
              "после письменного разрешения или лицензии."),
+    # Агрегаторы: через каждый доступны сотни и тысячи аукционных домов.
+    *[SourcePolicy(i, n, "auction", "pending_review", "условия сайта не проверены", f"https://www.{d}/", [d],
+                   min_interval=5.0, note=f"Агрегатор торгов: {what}. Проверить условия; лучше договориться о партнёрстве.")
+      for i, n, d, what in [
+          ("the-saleroom", "the-saleroom", "the-saleroom.com", "аукционные дома Великобритании и Европы"),
+          ("lot-tissimo", "Lot-tissimo", "lot-tissimo.com", "дома Германии и Австрии"),
+          ("drouot", "Drouot", "drouot.com", "французские аукционные дома"),
+          ("interencheres", "Interencheres", "interencheres.com", "французские аукционные дома"),
+          ("catawiki", "Catawiki", "catawiki.com", "онлайн-аукционы по всей Европе"),
+          ("bidspirit", "Bidspirit", "bidspirit.com", "дома Израиля, Европы и Азии"),
+      ]],
+    # Музеи с открытыми данными коллекций (цен нет: эталон работ, изображения, провенанс).
+    SourcePolicy(
+        "cleveland", "Cleveland Museum of Art Open Access", "reference", "approved", "CC0",
+        "https://openaccess-api.clevelandart.org/", ["openaccess-api.clevelandart.org"], min_interval=1.0,
+        note="Открытый API коллекции. Адаптер пока не написан."),
+    SourcePolicy(
+        "smithsonian", "Smithsonian Open Access", "reference", "approved", "CC0 (для материалов Open Access)",
+        "https://www.si.edu/openaccess", ["api.si.edu"], min_interval=1.0,
+        note="Нужен бесплатный ключ api.data.gov. Адаптер пока не написан."),
+    SourcePolicy(
+        "nga", "National Gallery of Art Open Data", "reference", "approved", "CC0",
+        "https://github.com/NationalGalleryOfArt/opendata", ["github.com", "raw.githubusercontent.com"],
+        min_interval=1.0, note="Выгрузка коллекции в CSV на GitHub. Адаптер пока не написан."),
+    SourcePolicy(
+        "moma", "MoMA Collection Data", "reference", "approved", "CC0",
+        "https://github.com/MuseumofModernArt/collection", ["github.com", "raw.githubusercontent.com"],
+        min_interval=1.0, note="Выгрузка коллекции на GitHub, в том числе печатная графика. Адаптер пока не написан."),
+    *[SourcePolicy(i, n, "reference", "pending_review", lic, u, [d], min_interval=1.0,
+                   note="Нужен ключ API; проверить условия коммерческого использования. Адаптер пока не написан.")
+      for i, n, d, u, lic in [
+          ("rijksmuseum", "Rijksmuseum", "rijksmuseum.nl", "https://www.rijksmuseum.nl/", "метаданные открыты, условия API проверить"),
+          ("europeana", "Europeana", "api.europeana.eu", "https://pro.europeana.eu/", "метаданные CC0, лицензии изображений разные"),
+          ("harvard", "Harvard Art Museums", "api.harvardartmuseums.org", "https://harvardartmuseums.org/collections/api", "условия API проверить"),
+          ("vam", "Victoria and Albert Museum", "api.vam.ac.uk", "https://developers.vam.ac.uk/", "условия API проверить"),
+      ]],
 ]}
 
 
@@ -79,6 +115,16 @@ def approved_auction_sources() -> list[SourcePolicy]:
             it["terms_url"], it["domains"], min_interval=max(5.0, it.get("min_interval", 5.0)),
             note=f"Условия проверены {it['reviewed_on']}: {it.get('review_note', '')}"))
     return out
+
+
+CANDIDATES = Path(__file__).resolve().parents[2] / "data" / "reference" / "source_candidates.jsonl"
+
+
+def discovered_candidates() -> list[dict]:
+    """Кандидаты, найденные через Wikidata (python -m arttracker.collect discover). Все — pending_review."""
+    if not CANDIDATES.exists():
+        return []
+    return [json.loads(line) for line in CANDIDATES.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def get(source_id: str) -> SourcePolicy:
