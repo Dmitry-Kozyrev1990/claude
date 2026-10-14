@@ -18,7 +18,7 @@
   --accent: #1d4f91;      /* берлинская лазурь — печатная краска офорта */
   --accent-soft: #e2eaf5;
   --accent-ink: #ffffff;
-  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
   --above: #2a78d6; --within: #c3c8d1; --below: #e34948; --unsold: #8b93a3;
   --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
   --tip-bg: #151922; --tip-ink: #f2f3f5;
@@ -31,7 +31,7 @@
   :root:not([data-theme="light"]) {
     --bg: #0e1116; --surface: #161a21; --sunken: #1c212a; --ink: #e9ecf1; --ink-2: #bcc3cf;
     --muted: #8d96a6; --line: #2a313c; --accent: #82aaea; --accent-soft: #1c2a3e; --accent-ink: #0e1116;
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
     --above: #3987e5; --within: #4a515d; --below: #e66767; --unsold: #6f7787;
     --tip-bg: #e9ecf1; --tip-ink: #0e1116;
     color-scheme: dark;
@@ -40,7 +40,7 @@
 :root[data-theme="dark"] {
   --bg: #0e1116; --surface: #161a21; --sunken: #1c212a; --ink: #e9ecf1; --ink-2: #bcc3cf;
   --muted: #8d96a6; --line: #2a313c; --accent: #82aaea; --accent-soft: #1c2a3e; --accent-ink: #0e1116;
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
   --above: #3987e5; --within: #4a515d; --below: #e66767; --unsold: #6f7787;
   --tip-bg: #e9ecf1; --tip-ink: #0e1116;
   color-scheme: dark;
@@ -73,6 +73,14 @@ button, select, input { font: inherit; color: inherit; }
 .tab { border: 0; background: none; padding: 18px 12px 16px; cursor: pointer; color: var(--ink-2); white-space: nowrap; border-bottom: 2px solid transparent; font-weight: 500; font-size: 14px; }
 .tab:hover { color: var(--ink); }
 .tab[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); }
+.cur { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
+.cur button { border: 0; background: var(--surface); padding: 6px 11px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--ink-2); }
+.cur button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.geo { display: grid; gap: 6px; }
+.geo-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 200px; gap: 10px; align-items: center; font-size: 13px; }
+.geo-bar { display: flex; height: 18px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--surface); }
+.geo-bar i { display: block; height: 100%; }
+@media (max-width: 520px) { .geo-row { grid-template-columns: 40px minmax(0, 1fr); } .geo-row .num:last-child { display: none; } }
 
 .note { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 0; }
 .note p { font-size: 13px; color: var(--ink-2); background: var(--sunken); border-radius: 8px; padding: 9px 12px; }
@@ -248,11 +256,12 @@ dl { margin: 0; }
 
 <header class="top">
   <div class="top-in">
-    <div class="brand"><b>Lot<i>line</i></b><span>аналитика аукционной графики</span></div>
+    <div class="brand"><b>Lot<i>line</i></b><span>аналитика аукционного рынка искусства</span></div>
     <nav class="tabs" id="tabs" aria-label="Разделы"></nav>
+    <div class="cur" role="group" aria-label="Валюта"><button id="cur-usd" data-cur="USD">$</button><button id="cur-rub" data-cur="RUB">₽</button></div>
   </div>
 </header>
-<div class="note"><p id="demo-note"><strong>Демо на синтетических данных.</strong> Художники и названия работ реальные; торги, лоты и цены смоделированы генератором, чтобы показать работу конвейера. Курсы валют и ставки премий приближённые.</p></div>
+<div class="note"><p id="demo-note"><strong>Демо на синтетических данных.</strong> Художники реальные; торги, лоты и цены смоделированы генератором, чтобы показать работу конвейера на зарубежном и российском рынках. Курсы валют и ставки премий приближённые.</p></div>
 <main id="view"></main>
 
 <script>const DATA = /*__DATA__*/null;</script>
@@ -265,24 +274,30 @@ const LOTS_BY_VAR = new Map();
 for (const l of DATA.lots) { if (!LOTS_BY_VAR.has(l.v)) LOTS_BY_VAR.set(l.v, []); LOTS_BY_VAR.get(l.v).push(l); }
 const VAR_IDS = Object.keys(VAR).sort((a, b) => (VAR[a].artist + VAR[a].title).localeCompare(VAR[b].artist + VAR[b].title));
 const ARTIST_IDS = Object.keys(ART);
-const SEGMENTS = ["Старые мастера", "Модернизм", "Поп-арт", "Современное искусство"];
-const SEG_COLOR = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)"];
-const MEDIUM = { screenprint: "шелкография", lithograph: "литография", intaglio: "офорт, гравюра", stencil: "пошуар", woodcut: "ксилография" };
+const MARKETS = DATA.meta.markets, SEGS = DATA.meta.segments;
+const SEG_COLOR = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)"];
+const MEDIUM = { screenprint: "шелкография", lithograph: "литография", intaglio: "офорт, гравюра", stencil: "пошуар", woodcut: "ксилография", painting: "живопись", drawing: "работа на бумаге" };
+const UNIQUE = new Set(["painting", "drawing"]);
+const RUB = DATA.meta.rub_per_usd;
 const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 const nf = new Intl.NumberFormat("ru-RU");
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+/* Аналитические суммы хранятся в долларах; в рублях показываются по текущему курсу. */
+let CUR = "USD";
 const usd = (x, short = false) => {
   if (x == null) return "—";
-  if (short && x >= 1e6) return "$" + (x / 1e6).toFixed(x >= 1e7 ? 0 : 1).replace(".", ",") + " млн";
-  if (short && x >= 1e4) return "$" + Math.round(x / 1e3) + " тыс.";
-  return "$" + nf.format(Math.round(x));
+  const r = CUR === "RUB", v = r ? x * RUB : x, pre = r ? "" : "$", suf = r ? " ₽" : "";
+  if (short && v >= 1e9) return pre + (v / 1e9).toFixed(1).replace(".", ",") + " млрд" + suf;
+  if (short && v >= 1e6) return pre + (v / 1e6).toFixed(v >= 1e7 ? 0 : 1).replace(".", ",") + " млн" + suf;
+  if (short && v >= 1e4) return pre + Math.round(v / 1e3) + " тыс." + suf;
+  return pre + nf.format(Math.round(v)) + suf;
 };
 const SYM = { USD: "$", GBP: "£", EUR: "€" };
-const money = (x, cur) => x == null ? "—" : SYM[cur] + nf.format(Math.round(x));
+const money = (x, cur) => x == null ? "—" : cur === "RUB" ? nf.format(Math.round(x)) + " ₽" : SYM[cur] + nf.format(Math.round(x));
 const pct = (x, digits = 1) => x == null ? "—" : (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x * 100).toFixed(digits).replace(".", ",") + "%";
 const share = x => x == null ? "—" : Math.round(x * 100) + "%";
-const estText = l => money(l.el, l.cur) + (l.eh !== l.el ? "–" + nf.format(l.eh) : "");
+const estText = l => l.eh !== l.el ? (l.cur === "RUB" ? `${nf.format(l.el)}–${money(l.eh, l.cur)}` : `${money(l.el, l.cur)}–${nf.format(l.eh)}`) : money(l.el, l.cur);
 const fdate = iso => { const [y, m, d] = iso.split("-").map(Number); return `${d} ${MONTHS[m - 1]} ${y}`; };
 const dnum = iso => { const [y, m, d] = iso.split("-").map(Number); return y + (m - 1) / 12 + (d - 1) / 365; };
 const stateLabel = s => !s ? "" : /^[IVX]+$/.test(s) ? "состояние " + s :
@@ -436,7 +451,18 @@ const state = {
   watchArtists: store.get("watchArtists", DATA.alerts.watchlist.filter(w => w.type === "artist").map(w => w.id)),
   watchWorks: store.get("watchWorks", DATA.alerts.watchlist.filter(w => w.type === "work").map(w => w.id)),
   valueQuality: 1, valueVariant: null, pipeArtist: "hockney", allLots: false,
+  market: store.get("market", "all"),
 };
+if (!["all", "intl", "ru"].includes(state.market)) state.market = "all";
+CUR = store.get("cur", "USD") === "RUB" ? "RUB" : "USD";
+const inMarket = id => state.market === "all" || ART[id].market === state.market;
+const marketPick = () => `<div class="pick" role="group" aria-label="Рынок">${[["all", "Все рынки"], ["intl", MARKETS.intl], ["ru", MARKETS.ru]].map(([k, t]) => `<button data-market="${k}" aria-pressed="${state.market === k}">${t}</button>`).join("")}</div>`;
+document.addEventListener("click", ev => {
+  const mb = ev.target.closest("[data-market]");
+  if (mb) { state.market = mb.dataset.market; store.set("market", state.market); render(); return; }
+  const cb = ev.target.closest("[data-cur]");
+  if (cb) { CUR = cb.dataset.cur; store.set("cur", CUR); render(); }
+});
 if (!ART[state.artist]) state.artist = "banksy";
 if (!VAR[state.variant]) state.variant = ART[state.artist].variants[0];
 state.watchWorks = state.watchWorks.filter(v => VAR[v]);
@@ -451,6 +477,8 @@ function route() {
 function go(name, arg) { location.hash = arg != null ? `${name}-${arg}` : name; }
 function render() {
   const name = route();
+  document.getElementById("cur-usd").setAttribute("aria-pressed", CUR === "USD");
+  document.getElementById("cur-rub").setAttribute("aria-pressed", CUR === "RUB");
   document.getElementById("tabs").innerHTML = ROUTES.map(([k, t]) => `<button class="tab" data-go="${k}" ${k === name ? 'aria-current="page"' : ""}>${t}</button>`).join("");
   const view = document.getElementById("view");
   view.className = "view-enter";
@@ -459,7 +487,7 @@ function render() {
   (AFTER[name] || (() => { }))();
   store.set("artist", state.artist); store.set("variant", state.variant);
 }
-window.addEventListener("hashchange", () => { state.allLots = false; render(); window.scrollTo(0, 0); });
+window.addEventListener("hashchange", () => { state.allLots = false; state.allWorks = false; render(); window.scrollTo(0, 0); });
 document.addEventListener("click", ev => {
   const g = ev.target.closest("[data-go]"); if (g) { go(g.dataset.go, g.dataset.arg); return; }
 });
@@ -472,34 +500,56 @@ const PAGES = {}, AFTER = {};
 
 /* ================= Рынок ================= */
 PAGES.market = () => {
-  const c = DATA.meta.counts, mi = DATA.market.all, ly = lastYear(mi);
+  const mk = state.market, c = DATA.meta.counts, bm = DATA.meta.by_market;
+  const mi = DATA.market[mk], ly = lastYear(mi);
   const growth = mi[ly].value / 100 - 1, cg = (mi[ly].value / 100) ** (1 / (ly - 2015)) - 1;
-  const q = DATA.pipeline.quality.object;
+  const q = DATA.pipeline.quality?.object;
+  const lotsN = mk === "all" ? c.raw : bm[mk].lots, soldN = mk === "all" ? c.sold : bm[mk].sold;
+  const turnover = mk === "all" ? c.turnover : bm[mk].turnover;
+  const artistsN = mk === "all" ? c.artists : bm[mk].artists;
+  const segs = mk === "all" ? [] : SEGS[mk];
   return `
+  ${marketPick()}
   <section class="page-head"><p class="eyebrow">Обзор рынка · на ${fdate(today)}</p>
-    <h1>Тиражная графика: 12 художников, 7 аукционных домов, 2015–2026</h1>
-    <p>Каждая продажа привязана к конкретной работе и конкретному экземпляру, поэтому индексы считаются по сопоставимым лотам, а не по средней цене.</p></section>
+    <h1>${mk === "all" ? `Зарубежный и российский рынки: ${artistsN} художников, ${c.sources} аукционных домов` : `${MARKETS[mk]}: ${artistsN} художников`}, 2015–2026</h1>
+    <p>${mk === "ru" ? "Русская классика, авангард, советское искусство, нонконформизм и современные художники. Российские дома и русские торги Christie's, Sotheby's и Bonhams в Лондоне до 2022 года." : mk === "intl" ? "Тиражная графика старых мастеров, модернизма, поп-арта и современного искусства на аукционах Европы и США." : "Каждая продажа привязана к конкретной работе и экземпляру, поэтому индексы считаются по сопоставимым лотам, а не по средней цене."}</p></section>
   <section class="kpis">
-    ${kpi(nf.format(c.raw), "Лотов в базе", `из ${c.sources} источников, ${nf.format(c.sold)} продано`)}
-    ${kpi(usd(c.turnover, true), "Оборот продаж", "с премией покупателя")}
-    ${kpi(pct(growth, 0), "Индекс рынка с 2015", `в среднем ${pct(cg)} в год`)}
-    ${kpi(nf.format(c.objects_resold), "Экземпляров с перепродажами", `из ${nf.format(c.objects)} опознанных`)}
-    ${kpi(q.f1.toFixed(2).replace(".", ","), "Точность сопоставления, F1", "уровень экземпляра, на эталоне")}
+    ${kpi(nf.format(lotsN), "Лотов в базе", `${nf.format(soldN)} продано`)}
+    ${kpi(usd(turnover, true), "Оборот продаж", CUR === "RUB" ? "с премией, по текущему курсу" : "с премией покупателя")}
+    ${kpi(pct(growth, 0), "Индекс с 2015", `в среднем ${pct(cg)} в год`)}
+    ${kpi(nf.format(c.objects_resold), "Работ с перепродажами", `из ${nf.format(c.objects)} опознанных, оба рынка`)}
+    ${q ? kpi(q.f1.toFixed(2).replace(".", ","), "Точность сопоставления, F1", "уровень экземпляра, на эталоне") : kpi(nf.format(DATA.pipeline.review_queue), "Пар на проверке у эксперта", "реальные данные: эталона нет")}
   </section>
   <section class="panel">
-    <div class="panel-head"><h2>Индекс цен по сегментам, 2015 = 100</h2><p>Регрессия по повторным продажам и характеристикам лотов</p></div>
-    <div class="legend">${SEGMENTS.map((s, i) => `<span><i style="background:${SEG_COLOR[i]}"></i>${s}</span>`).join("")}<span><i style="background:var(--ink)"></i>Весь рынок</span></div>
+    <div class="panel-head"><h2>${mk === "all" ? "Индекс цен по рынкам" : "Индекс цен по сегментам"}, 2015 = 100</h2><p>Регрессия по повторным продажам и характеристикам лотов</p></div>
+    <div class="legend">${mk === "all" ? `<span><i style="background:var(--s1)"></i>${MARKETS.intl}</span><span><i style="background:var(--s2)"></i>${MARKETS.ru}</span>` : segs.map((s, i) => `<span><i style="background:${SEG_COLOR[i]}"></i>${s}</span>`).join("")}<span><i style="background:var(--ink)"></i>${mk === "all" ? "Оба рынка" : "Весь рынок"}</span></div>
     <div class="chart" id="mk-chart"></div>
   </section>
+  ${mk !== "intl" ? geoPanel() : ""}
   <section class="panel">
     <div class="panel-head"><h2>Художники</h2><p>Нажмите на строку, чтобы открыть карточку. Столбцы сортируются.</p></div>
     <div class="table-wrap" id="artists-table"></div>
   </section>`;
 };
+function geoPanel() {
+  const g = DATA.ru_geo, years = Object.keys(g).sort();
+  return `<section class="panel">
+    <div class="panel-head"><h2>Где продаётся русское искусство</h2><p>Доля оборота: российские дома и русские торги в Лондоне</p></div>
+    <div class="legend"><span><i class="dot" style="background:var(--s2)"></i>Россия</span><span><i class="dot" style="background:var(--s1)"></i>За рубежом</span></div>
+    <div class="geo" role="img" aria-label="Доля оборота русского искусства в России и за рубежом по годам">${years.map(y => {
+      const r = g[y], tot = r.ru + r.abroad, sr = tot ? r.ru / tot : 0;
+      return `<div class="geo-row"><span class="num">${y}</span><span class="geo-bar"><i style="width:${sr * 100}%;background:var(--s2)"></i>${r.abroad ? `<i style="flex:1;background:var(--s1)"></i>` : ""}</span><span class="num muted">${Math.round(sr * 100)}% в России · ${usd(tot, true)}</span></div>`;
+    }).join("")}</div>
+    <p class="muted" style="font-size:12.5px">С 2022 года международные дома не проводят русских торгов, и рынок полностью переместился в Россию. Данные синтетические, но сдвиг смоделирован по реальному событию.</p>
+  </section>`;
+}
 AFTER.market = () => {
+  const mk = state.market;
   const toPts = idx => Object.keys(idx).map(Number).sort((a, b) => a - b).map(y => ({ x: y, y: idx[y].value, lo: idx[y].lo, hi: idx[y].hi, n: idx[y].n }));
-  const series = SEGMENTS.map((s, i) => ({ name: s, color: SEG_COLOR[i], pts: toPts(DATA.market[s]) }));
-  series.push({ name: "Весь рынок", color: "var(--ink)", pts: toPts(DATA.market.all), width: 2.5, band: true });
+  const series = mk === "all"
+    ? [{ name: MARKETS.intl, color: "var(--s1)", pts: toPts(DATA.market.intl), label: "зарубежный" }, { name: MARKETS.ru, color: "var(--s2)", pts: toPts(DATA.market.ru), label: "российский" }]
+    : SEGS[mk].map((s, i) => ({ name: s, color: SEG_COLOR[i], pts: toPts(DATA.market[s]) }));
+  series.push({ name: mk === "all" ? "Оба рынка" : "Весь рынок", color: "var(--ink)", pts: toPts(DATA.market[mk]), width: 2.5, band: true });
   lineChart(document.getElementById("mk-chart"), { series, baseline: 100, yFmt: v => nf.format(Math.round(v)), tipTitle: x => `${x} год` });
   renderArtistsTable();
 };
@@ -509,14 +559,14 @@ function renderArtistsTable() {
     ["liq", "Ликвидность", ""], ["st", "Доля проданных", "r"], ["above", "Выше эстимейта", "r"], ["turnover_12m", "Оборот, 12 мес.", "r"],
   ];
   const val = (a, k) => k === "liq" ? a.liquidity.score : k === "st" ? a.liquidity.sell_through : k === "above" ? a.bias.above : a[k];
-  const rows = ARTIST_IDS.map(id => ART[id]).sort((a, b) => {
+  const rows = ARTIST_IDS.filter(inMarket).map(id => ART[id]).sort((a, b) => {
     const { key, dir } = state.sort; const va = val(a, key), vb = val(b, key);
     return typeof va === "string" ? dir * va.localeCompare(vb) : dir * ((va ?? -1e9) - (vb ?? -1e9));
   });
   document.getElementById("artists-table").innerHTML = `<table><thead><tr>${cols.map(([k, t, c]) => k === "spark" ? `<th>${t}</th>` :
     `<th class="sortable ${c || ""}" data-sort="${k}" ${state.sort.key === k ? `aria-sort="${state.sort.dir > 0 ? "ascending" : "descending"}"` : ""}>${t}${state.sort.key === k ? (state.sort.dir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}</tr></thead><tbody>${rows.map(a => `
     <tr class="link" data-go="artist" data-arg="${a.id}">
-      <td><div class="cell-title"><span>${esc(a.name_ru)}</span><small>${esc(a.segment)} · ${esc(a.life)}</small></div></td>
+      <td><div class="cell-title"><span>${esc(a.name_ru)}</span><small>${esc(a.segment)} · ${esc(a.life)}${state.market === "all" ? ` · ${a.market === "ru" ? "РФ" : "зарубежный"}` : ""}</small></div></td>
       <td>${sparkline(a.index)}</td>
       <td class="r num ${a.cagr_all >= 0 ? "pos" : "neg"}">${pct(a.cagr_all)}</td>
       <td class="r num ${a.cagr_3y >= 0 ? "pos" : "neg"}">${pct(a.cagr_3y)}</td>
@@ -535,7 +585,8 @@ PAGES.artist = () => {
   const a = ART[state.artist], ly = lastYear(a.index), b = a.bias;
   const lots = DATA.lots.filter(l => l.a === a.id && l.s !== "upcoming").sort((x, y) => y.d.localeCompare(x.d)).slice(0, 10);
   return `
-  <div class="pick" role="group" aria-label="Художник">${ARTIST_IDS.map(id => `<button data-go="artist" data-arg="${id}" aria-pressed="${id === a.id}">${esc(ART[id].name_ru)}</button>`).join("")}</div>
+  ${marketPick()}
+  <div class="pick" role="group" aria-label="Художник">${ARTIST_IDS.filter(id => inMarket(id) || id === a.id).map(id => `<button data-go="artist" data-arg="${id}" aria-pressed="${id === a.id}">${esc(ART[id].name_ru)}</button>`).join("")}</div>
   <section class="page-head"><p class="eyebrow">${esc(a.segment)} · ${esc(a.life)}</p><h1>${esc(a.name_ru)} <span class="muted" style="font-weight:500;font-style:italic">${esc(a.name)}</span></h1>${wikiLine(a.id)}</section>
   <section class="kpis">
     ${kpi(nf.format(Math.round(a.index[ly].value)), `Индекс ${ly}`, "2015 = 100")}
@@ -565,14 +616,15 @@ PAGES.artist = () => {
     </section>
   </div>
   <section class="panel">
-    <div class="panel-head"><h2>Работы в базе</h2><p>Варианты одной работы (состояния доски, издания) учитываются отдельно</p></div>
-    <div class="cards">${a.variants.map(vid => { const v = VAR[vid], val = v.valuation; return `
+    <div class="panel-head"><h2>Работы в базе</h2><p>${a.variants.length} ${a.variants.length > 12 && !state.allWorks ? "· показаны 12 самых активных" : ""}. Варианты одной работы (состояния доски, издания) учитываются отдельно</p></div>
+    <div class="cards">${(state.allWorks ? a.variants : a.variants.slice(0, 12)).map(vid => { const v = VAR[vid], val = v.valuation; return `
       <button class="card" data-go="work" data-arg="${VAR_IDS.indexOf(vid)}">
         <h3>${esc(v.title)}</h3>
         <div class="aliases">${v.variant ? `<span class="chip accent">${esc(stateLabel(v.variant))}</span>` : ""}${v.ref ? `<span class="chip">${esc(v.ref)}</span>` : ""}<span class="chip">${esc(MEDIUM[v.medium] || v.medium)}</span></div>
         <div class="row"><span>Лотов / экземпляров</span><span class="num">${v.lots} / ${v.objects}</span></div>
         <div class="row"><span>Справедливая цена</span><b class="num">${val.p50 ? usd(val.p50) : "—"}</b></div>
       </button>`; }).join("")}</div>
+    ${a.variants.length > 12 ? `<button class="btn ghost" id="a-more" style="justify-self:start">${state.allWorks ? "Свернуть" : "Показать все " + a.variants.length}</button>` : ""}
   </section>
   <section class="panel">
     <div class="panel-head"><h2>Последние лоты</h2></div>
@@ -585,6 +637,7 @@ function wikiLine(id) {
   return `<p class="muted" style="font-size:13px">Wikidata <a href="https://www.wikidata.org/wiki/${esc(w.wikidata_id)}" target="_blank" rel="noopener">${esc(w.wikidata_id)}</a>${w.ulan_id ? ` · Getty ULAN <a href="https://vocab.getty.edu/page/ulan/${esc(w.ulan_id)}" target="_blank" rel="noopener">${esc(w.ulan_id)}</a>` : ""} · ${w.names.length} вариантов имени для сопоставления: <span class="mono">${esc(w.names.slice(0, 6).join(" · "))}${w.names.length > 6 ? " …" : ""}</span></p>`;
 }
 AFTER.artist = () => {
+  document.getElementById("a-more")?.addEventListener("click", () => { state.allWorks = !state.allWorks; render(); });
   const a = ART[state.artist];
   const pts = Object.keys(a.index).map(Number).sort((x, y) => x - y).map(y => ({ x: y, y: a.index[y].value, lo: a.index[y].lo, hi: a.index[y].hi, n: a.index[y].n }));
   const mk = DATA.market.all;
@@ -631,7 +684,7 @@ PAGES.work = () => {
       <dl class="facts">
         <div><dt>Техника</dt><dd>${esc(MEDIUM[v.medium] || v.medium)}</dd></div>
         <div><dt>Размер листа</dt><dd class="num">${v.size ? `${String(v.size[0]).replace(".", ",")} × ${String(v.size[1]).replace(".", ",")} см` : "—"}</dd></div>
-        <div><dt>Тираж</dt><dd>${v.edition ? v.edition + " экз." : "не нумерован"}</dd></div>
+        <div><dt>Тираж</dt><dd>${UNIQUE.has(v.medium) ? "уникальная работа" : v.edition ? v.edition + " экз." : "не нумерован"}</dd></div>
         <div><dt>Лотов / экземпляров</dt><dd class="num">${v.lots} / ${v.objects}</dd></div>
       </dl>
       <button class="btn ghost" data-go="value" style="justify-self:start">Оценить свой экземпляр</button>
@@ -673,7 +726,7 @@ AFTER.work = () => {
 };
 
 /* ================= Оценка ================= */
-const QUALITY = [[0.8, "ниже среднего: пятна, обрезанные поля"], [1, "типичная сохранность"], [1.2, "отличная: ранний оттиск, широкие поля"]];
+const QUALITY = [[0.8, "ниже среднего: повреждения, реставрация, обрезанные поля"], [1, "типичная сохранность"], [1.2, "отличная: музейный уровень, ранний оттиск"]];
 PAGES.value = () => {
   const vid = state.valueVariant || DATA.alerts.collection[0]?.variant || state.variant;
   state.valueVariant = vid;
@@ -787,18 +840,20 @@ AFTER.alerts = () => {
 };
 
 /* ================= Как это работает ================= */
-function showcaseObject() {
+function showcaseObject(market) {
   let best = null, bestScore = 0;
-  const byObj = new Map(); for (const l of DATA.lots) if (!l.q && l.s === "sold") { if (!byObj.has(l.o)) byObj.set(l.o, []); byObj.get(l.o).push(l); }
+  const byObj = new Map(); for (const l of DATA.lots) if (!l.q && l.s === "sold" && ART[l.a].market === market) { if (!byObj.has(l.o)) byObj.set(l.o, []); byObj.get(l.o).push(l); }
   for (const [o, ls] of byObj) {
     const houses = new Set(ls.map(l => l.h)), langs = new Set(ls.map(l => HOUSES[l.h].lang));
     const score = houses.size * 10 + langs.size * 5 + (ls.some(l => l.inf) ? 3 : 0) + (VAR[ls[0].v].ref ? 2 : 0) - (ls[0].ed ? 4 : 0);
     if (score > bestScore) { bestScore = score; best = ls; }
   }
-  return best.sort((a, b) => a.d.localeCompare(b.d));
+  return best ? best.sort((a, b) => a.d.localeCompare(b.d)) : null;
 }
 PAGES.pipeline = () => {
-  const p = DATA.pipeline, c = DATA.meta.counts, q = p.quality, obj = showcaseObject(), v = VAR[obj[0].v];
+  const p = DATA.pipeline, c = DATA.meta.counts, q = p.quality, obj = showcaseObject("intl") || [], v = obj.length ? VAR[obj[0].v] : null;
+  const robj = showcaseObject("ru") || [], rv0 = robj.length ? VAR[robj[0].v] : null;
+  const rawCard = l => `<div class="raw"><span class="src">${esc(HOUSES[l.h].name)}, ${esc(HOUSES[l.h].city)} · ${fdate(l.d)}</span><b>${esc(l.ar)}</b><span>${esc(l.t)}</span><span>${esc(l.m || "")}</span><span>${esc(l.dim || "размеры не указаны")}</span><span>${esc(l.er)}</span><span>${esc(l.pr || "")}</span></div>`;
   const reduction = 1 - p.pairs_compared / p.pairs_naive;
   const rv = p.review.slice(0, 3);
   return `
@@ -807,8 +862,10 @@ PAGES.pipeline = () => {
   <div class="steps">
     <section class="step"><div class="panel">
       <div class="panel-head"><h2>Сбор: каталоги в форматах домов</h2><p>${nf.format(c.raw)} записей из ${c.sources} источников</p></div>
-      <p>Один и тот же оттиск — <strong>${esc(v.title)}</strong>${v.variant ? `, ${esc(stateLabel(v.variant))}` : ""} — в каталогах разных домов. Язык, единицы, валюта и формат цены везде свои.</p>
-      <div class="grid-2e">${obj.slice(0, 4).map(l => `<div class="raw"><span class="src">${esc(HOUSES[l.h].name)} · ${fdate(l.d)}</span><b>${esc(l.ar)}</b><span>${esc(l.t)}</span><span>${esc(l.m || "")}</span><span>${esc(l.dim || "размеры не указаны")}</span><span>${esc(l.er)}</span><span>${esc(l.pr || "")}</span></div>`).join("")}</div>
+      ${v ? `<p>Один и тот же оттиск — <strong>${esc(v.title)}</strong>${v.variant ? `, ${esc(stateLabel(v.variant))}` : ""} — в каталогах разных домов. Язык, единицы, валюта и формат цены везде свои.</p>
+      <div class="grid-2e">${obj.slice(0, 4).map(rawCard).join("")}</div>` : ""}
+      ${rv0 ? `<p>Российский рынок сложнее: картина уникальна, а название типовое. <strong>${esc(ART[rv0.artist].name_ru)}, «${esc(rv0.title)}»</strong> — одна и та же картина в каталогах разных домов, по-русски и по-английски, с инициалами и сокращениями.</p>
+      <div class="grid-2e">${robj.slice(0, 4).map(rawCard).join("")}</div>` : ""}
     </div></section>
     <section class="step"><div class="panel">
       <div class="panel-head"><h2>Нормализация: единые поля</h2><p>Доля лотов, где поле извлечено</p></div>
@@ -824,18 +881,18 @@ PAGES.pipeline = () => {
         <div><b>${nf.format(c.objects)}</b><span>физических экземпляров</span></div><div><b>${p.variant_inferred}</b><span>лотов: состояние определено по изображению</span></div>
         <div><b>${c.after}</b><span>копий «после» художника отсеяно</span></div>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>Уровень</th><th class="r">Точность</th><th class="r">Полнота</th><th class="r">F1</th><th class="r">Пар в эталоне</th></tr></thead><tbody>${[["work", "Работа"], ["variant", "Вариант"], ["object", "Экземпляр"]].map(([k, t]) => `<tr><td>${t}</td><td class="r num">${(q[k].precision * 100).toFixed(1).replace(".", ",")}%</td><td class="r num">${(q[k].recall * 100).toFixed(1).replace(".", ",")}%</td><td class="r num">${q[k].f1.toFixed(3).replace(".", ",")}</td><td class="r num">${nf.format(q[k].pairs_true)}</td></tr>`).join("")}</tbody></table></div>
-      <p class="muted" style="font-size:13px">Метрики считаются по эталонной разметке, которая есть у синтетических данных. На реальных каталогах качество будет ниже, для его измерения нужна ручная разметка нескольких тысяч пар.</p>
+      ${q ? `<div class="table-wrap"><table><thead><tr><th>Уровень</th><th class="r">Точность</th><th class="r">Полнота</th><th class="r">F1</th><th class="r">Пар в эталоне</th></tr></thead><tbody>${[["work", "Работа"], ["variant", "Вариант"], ["object", "Экземпляр"]].map(([k, t]) => `<tr><td>${t}</td><td class="r num">${(q[k].precision * 100).toFixed(1).replace(".", ",")}%</td><td class="r num">${(q[k].recall * 100).toFixed(1).replace(".", ",")}%</td><td class="r num">${q[k].f1.toFixed(3).replace(".", ",")}</td><td class="r num">${nf.format(q[k].pairs_true)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="muted" style="font-size:13px">Метрики считаются по эталонной разметке, которая есть у синтетических данных. На реальных каталогах качество будет ниже, для его измерения нужна ручная разметка нескольких тысяч пар.</p>` : `<p class="muted" style="font-size:13px">На реальных данных эталонной разметки нет: качество измеряется по решениям эксперта в очереди проверки.</p>`}
       <h3>Очередь ручной проверки: ${p.review_queue} пар</h3>
       <p class="muted" style="font-size:13px">Пары, где система не уверена, получает эксперт. Его решения становятся обучающими данными.</p>
-      <div class="grid-2e">${rv.map(r => { const A = LOTS.get(r.a), B = LOTS.get(r.b); return `<div class="raw"><span class="src">${r.level === "object" ? "тот же экземпляр?" : "та же работа?"} · уверенность ${Math.round(r.prob * 100)}%</span><b>${esc(HOUSES[A.h].name)}, ${A.d.slice(0, 4)}:</b><span>${esc(A.t)} · ${esc(A.dim || "размеры не указаны")}</span><b>${esc(HOUSES[B.h].name)}, ${B.d.slice(0, 4)}:</b><span>${esc(B.t)} · ${esc(B.dim || "размеры не указаны")}</span><span>сходство изображений ${r.features.image.toFixed(3)}</span></div>`; }).join("")}</div>
+      <div class="grid-2e">${rv.map(r => { const A = LOTS.get(r.a), B = LOTS.get(r.b); return `<div class="raw"><span class="src">${r.level === "object" ? "тот же экземпляр?" : "та же работа?"} · уверенность ${Math.round(r.prob * 100)}%</span><b>${esc(HOUSES[A.h].name)}, ${A.d.slice(0, 4)}:</b><span>${esc(A.t)} · ${esc(A.dim || "размеры не указаны")}</span><b>${esc(HOUSES[B.h].name)}, ${B.d.slice(0, 4)}:</b><span>${esc(B.t)} · ${esc(B.dim || "размеры не указаны")}</span><span>${r.features.image != null ? `сходство изображений ${r.features.image.toFixed(3)}` : "изображений нет: решает эксперт"}</span></div>`; }).join("")}</div>
     </div></section>
-    <section class="step"><div class="panel">
+    ${DATA.meta.synthetic ? `<section class="step"><div class="panel">
       <div class="panel-head"><h2>Аналитика: проверка метода</h2><p>Индекс, восстановленный по лотам, против заложенного в генератор</p></div>
       <div class="pick" role="group" aria-label="Художник для проверки">${ARTIST_IDS.map(id => `<button data-pa="${id}" aria-pressed="${id === state.pipeArtist}">${esc(ART[id].name_ru)}</button>`).join("")}</div>
       <div class="legend"><span><i style="background:var(--s1)"></i>Восстановлен конвейером</span><span><i class="band" style="background:var(--s1)"></i>90% интервал</span><span style="color:var(--s2)"><i class="dash"></i><span style="color:var(--ink-2)">Заложен в данные</span></span></div>
       <div class="chart" id="p-chart"></div>
-    </div></section>
+    </div></section>` : ""}
     <section class="step"><div class="panel">
       <div class="panel-head"><h2>Уведомления</h2><p>${DATA.upcoming.length} предстоящих лотов сверены с избранным</p></div>
       <p>Для каждого нового лота считается справедливая цена и сравнивается с эстимейтом. Лоты, похожие на работы из коллекции пользователя, находятся по изображению.</p>
@@ -875,21 +932,26 @@ AFTER.pipeline = () => {
   drawPipe();
 };
 function drawPipe() {
-  const a = ART[state.pipeArtist];
+  const a = ART[state.pipeArtist], box = document.getElementById("p-chart");
+  if (!box || !a || !a.true_index) return;
   const pts = Object.keys(a.index).map(Number).sort((x, y) => x - y).map(y => ({ x: y, y: a.index[y].value, lo: a.index[y].lo, hi: a.index[y].hi, n: a.index[y].n }));
   const truth = Object.keys(a.true_index).map(Number).sort((x, y) => x - y).map(y => ({ x: y, y: a.true_index[y] }));
-  lineChart(document.getElementById("p-chart"), {
+  lineChart(box, {
     series: [{ name: "Заложен", color: "var(--s2)", pts: truth, dash: true, label: "заложен" }, { name: "Восстановлен", color: "var(--s1)", pts, band: true, label: "восстановлен" }],
     baseline: 100, height: 260, yFmt: v => nf.format(Math.round(v)), tipTitle: x => `${a.name_ru}, ${x}`,
   });
 }
 
 (() => {
+  if (!DATA.meta.synthetic) {
+    document.getElementById("demo-note").innerHTML = `<strong>Реальные данные из архивов по договорам:</strong> ${esc(DATA.meta.licenses.join("; "))}. Суммы с премией покупателя по ставкам из договоров.`;
+    return;
+  }
   const r = DATA.reference || {}, real = [];
   if (r.fx_source) real.push(`курсы валют ECB (${nf.format(r.fx_source.days)} дней)`);
   if (r.counts?.artists) real.push(`справочник художников Wikidata`);
   if (r.counts?.museum_cards) real.push(`${r.counts.museum_cards} музейных карточек Art Institute of Chicago и The Met`);
-  if (real.length) document.getElementById("demo-note").innerHTML = `<strong>Демо: торги, лоты и цены синтетические.</strong> Художники и названия работ реальные. Из открытых источников подключены настоящие данные: ${real.join(", ")}. Ставки премий приближённые.`;
+  if (real.length) document.getElementById("demo-note").innerHTML = `<strong>Демо: торги, лоты и цены синтетические</strong> для обоих рынков. Художники реальные. Из открытых источников подключены настоящие данные: ${real.join(", ")}. Курс рубля и ставки премий приближённые.`;
 })();
 render();
 </script>

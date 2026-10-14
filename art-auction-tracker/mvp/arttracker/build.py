@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import re
 import statistics
 import time
 from collections import Counter, defaultdict
@@ -16,7 +17,7 @@ from . import generate
 from .alerts import build_alerts, lot_signal
 from .analytics import (YEARS, cagr, estimate_bias, hedonic_index, index_at, liquidity, repeat_sales,
                         sold_originals, valuation, variant_catalog)
-from .catalog import ARTISTS, HOUSES
+from .catalog import ARTISTS, HOUSES, MARKETS, SEGMENTS, fx
 from .matching import match, pairwise_quality
 from .normalize import normalize
 
@@ -78,15 +79,48 @@ def VARIANT_WORK(vid: str) -> str:
     return vid.split("|")[0]
 
 
-def run() -> dict:
-    if not (DATA / "raw_lots.jsonl").exists():
-        generate.generate(DATA)
+def true_index(aid: str) -> dict:
+    """Заложенный в генератор уровень цен — только для проверки метода на демо-данных."""
+    from .generate_ru import RU_WORKS, ru_index
+    f = ru_index if aid in RU_WORKS else generate.artist_index
+    return {y: round(100 * f(aid, y + 0.5) / f(aid, 2015.5), 1) for y in YEARS}
+
+
+def register_unknown_artists(lots):
+    """Реальные архивы содержат тысячи художников, которых нет в справочнике: добавляем их
+    по нормализованному имени, рынок — по региону дома."""
+    from .normalize import tokens
+    for l in lots:
+        if l.artist_id or l.qualifier:
+            continue
+        name = re.sub(r"\(.*?\)|\d{4}\s*[–-]\s*\d{4}", "", l.raw["artist_raw"]).strip(" .,")
+        aid = "a-" + "-".join(tokens(name))[:60]
+        if aid not in ARTISTS:
+            ARTISTS[aid] = {"name": name, "name_ru": name, "aliases": [], "life": "", "nationality": "",
+                            "segment": "Прочие", "market": "ru" if HOUSES[l.source].get("region") == "ru" else "intl"}
+        l.artist_id = aid
+
+
+def run(source: str = "demo") -> dict:
+    """source="demo" — синтетические данные с эталоном; "imported" — архивы партнёров."""
     t0 = time.time()
-    raw = load_jsonl(DATA / "raw_lots.jsonl")
-    emb = json.loads((DATA / "image_embeddings.json").read_text())
+    if source == "imported":
+        from .archive import IMPORTED, load_imported
+        raw = load_imported()
+        if not raw:
+            raise SystemExit("Нет импортированных архивов: python -m arttracker.collect import-archive …")
+        emb_path = IMPORTED / "image_embeddings.json"
+        emb = json.loads(emb_path.read_text()) if emb_path.exists() else {}
+    else:
+        if not (DATA / "raw_lots.jsonl").exists():
+            generate.generate(DATA)
+        raw = load_jsonl(DATA / "raw_lots.jsonl")
+        emb = json.loads((DATA / "image_embeddings.json").read_text())
 
     # 1. Нормализация
     lots = [normalize(r) for r in raw]
+    if source == "imported":
+        register_unknown_artists(lots)
     by_id = {l.lot_id: l for l in lots}
     coverage_fields = {"artist_id": "Художник", "medium_class": "Техника", "height_cm": "Размеры",
                        "year_from": "Год создания", "est_low": "Эстимейт", "catalogue_ref": "Номер в каталоге",
@@ -102,8 +136,13 @@ def run() -> dict:
     sold = sold_originals(past)
     artists_out = {}
     indices = {}
-    for aid, a in ARTISTS.items():
-        a_lots = [l for l in past if l.artist_id == aid]
+    by_artist_lots = {}
+    for l in past:
+        by_artist_lots.setdefault(l.artist_id, []).append(l)
+    for aid, a in list(ARTISTS.items()):
+        a_lots = by_artist_lots.get(aid, [])
+        if not a_lots:
+            continue
         a_sold = [l for l in sold if l.artist_id == aid]
         idx = hedonic_index(a_sold, m.object_of)
         indices[aid] = idx
@@ -113,8 +152,8 @@ def run() -> dict:
             "id": aid, "name": a["name"], "name_ru": a["name_ru"], "life": a["life"],
             "nationality": a["nationality"], "segment": a["segment"],
             "index": idx,
-            "true_index": {y: round(100 * generate.artist_index(aid, y + 0.5) / generate.artist_index(aid, 2015.5), 1)
-                           for y in YEARS},
+            "market": a["market"],
+            "true_index": true_index(aid) if source == "demo" else None,
             "cagr_all": round(cagr(idx[2015]["value"], idx[max(idx)]["value"], max(idx) - 2015), 4) if idx else None,
             "cagr_3y": round(cagr(index_at(idx, 2023), index_at(idx, 2026), 3), 4) if idx else None,
             "liquidity": liquidity(a_lots, TODAY),
@@ -125,8 +164,20 @@ def run() -> dict:
             "repeat": {"n": len(pairs), "median_cagr": round(statistics.median(p["cagr"] for p in pairs), 4) if pairs else None},
         }
 
-    # Рынок в целом и по сегментам: та же регрессия на всех лотах.
+    # Рынок в целом, по рынкам и по сегментам: та же регрессия на всех лотах.
     market = {"all": hedonic_index(sold, m.object_of)}
+    for mk in MARKETS:
+        market[mk] = hedonic_index([l for l in sold if ARTISTS[l.artist_id]["market"] == mk], m.object_of)
+
+    # Где продаётся русское искусство: оборот в России и за рубежом по годам.
+    ru_geo = {}
+    for l in sold:
+        if ARTISTS[l.artist_id]["market"] != "ru":
+            continue
+        g = ru_geo.setdefault(l.year, {"ru": 0, "abroad": 0, "lots_ru": 0, "lots_abroad": 0})
+        where = "ru" if HOUSES[l.source]["region"] == "ru" else "abroad"
+        g[where] += l.total_usd
+        g["lots_" + where] += 1
     for seg in sorted({a["segment"] for a in ARTISTS.values()}):
         seg_lots = [l for l in sold if ARTISTS[l.artist_id]["segment"] == seg]
         market[seg] = hedonic_index(seg_lots, m.object_of)
@@ -139,7 +190,7 @@ def run() -> dict:
     valuations = {}
     for vid, v in variants.items():
         valuations[vid] = valuation([l for l in lots_by_variant[vid] if l.status != "upcoming"],
-                                    indices[v["artist"]], TODAY.year)
+                                    indices.get(v["artist"], {}), TODAY.year)
         v["valuation"] = valuations[vid]
         v_sold = sorted([l for l in lots_by_variant[vid] if l.status == "sold"], key=lambda l: l.sale_date)
         v["last_sale"] = v_sold[-1].lot_id if v_sold else None
@@ -157,9 +208,11 @@ def run() -> dict:
         upcoming_out.append({"lot": l.lot_id, "signal": lot_signal(l, valuations.get(vid))})
 
     # 5. Оценка качества сопоставления по эталону (есть только у синтетических данных)
-    truth = {t["source_lot_id"]: t for t in load_jsonl(DATA / "truth.jsonl")}
-    quality = {lvl: pairwise_quality(getattr(m, f"{lvl}_of"), {k: v[f"{lvl}_id"] for k, v in truth.items()})
-               for lvl in ("work", "variant", "object")}
+    quality = None
+    if source == "demo":
+        truth = {t["source_lot_id"]: t for t in load_jsonl(DATA / "truth.jsonl")}
+        quality = {lvl: pairwise_quality(getattr(m, f"{lvl}_of"), {k: v[f"{lvl}_id"] for k, v in truth.items()})
+                   for lvl in ("work", "variant", "object")}
 
     review = []
     for s in sorted(m.review_queue, key=lambda s: -s.prob)[:8]:
@@ -187,9 +240,17 @@ def run() -> dict:
     data = {
         "meta": {
             "today": TODAY.isoformat(), "built_seconds": round(time.time() - t0, 1),
-            "synthetic": True,
+            "synthetic": source == "demo",
+            "licenses": sorted({r["license"] for r in raw if r.get("license")}),
+            "markets": MARKETS, "segments": SEGMENTS,
+            "rub_per_usd": round(1 / fx("RUB", TODAY.year), 2),
+            "by_market": {mk: {"lots": sum(1 for l in lots if ARTISTS.get(l.artist_id, {}).get("market") == mk),
+                               "sold": sum(1 for l in sold if ARTISTS[l.artist_id]["market"] == mk),
+                               "turnover": sum(l.total_usd for l in sold if ARTISTS[l.artist_id]["market"] == mk),
+                               "artists": sum(1 for a in ARTISTS.values() if a["market"] == mk)}
+                          for mk in MARKETS},
             "counts": {
-                "raw": len(raw), "sources": len(HOUSES), "artists": len(ARTISTS),
+                "raw": len(raw), "sources": len({h["name"] for h in HOUSES.values()}), "artists": len(ARTISTS),
                 "sold": len(sold), "bought_in": sum(l.status == "bought_in" for l in past),
                 "upcoming": len(upcoming), "after": sum(1 for l in lots if l.qualifier),
                 "works": len({w for w in m.work_of.values() if not w.startswith("x:")}),
@@ -203,6 +264,7 @@ def run() -> dict:
         "reference": reference,
         "artists": artists_out,
         "market": market,
+        "ru_geo": dict(sorted(ru_geo.items())),
         "variants": variants,
         "lots": lots_out,
         "repeat_pairs": repeat_sales(past, m),
@@ -217,22 +279,28 @@ def run() -> dict:
     return data
 
 
-def write(data: dict):
+def write(data: dict, out: str = "index.html"):
     DATA.mkdir(exist_ok=True)
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     (DATA / "data.json").write_text(payload, encoding="utf-8")
     template = (WEB / "template.html").read_text(encoding="utf-8")
     html = template.replace("/*__DATA__*/null", payload.replace("</", "<\\/"))
-    (WEB / "index.html").write_text(html, encoding="utf-8")
+    (WEB / out).write_text(html, encoding="utf-8")
 
 
 if __name__ == "__main__":
-    d = run()
-    write(d)
+    import argparse
+    ap = argparse.ArgumentParser(prog="arttracker.build")
+    ap.add_argument("--source", choices=["demo", "imported"], default="demo")
+    args = ap.parse_args()
+    d = run(args.source)
+    out = "index.html" if args.source == "demo" else "real.html"
+    write(d, out)
     c = d["meta"]["counts"]
     q = d["pipeline"]["quality"]
     print(f"лотов: {c['raw']}, продано: {c['sold']}, работ: {c['works']}, вариантов: {c['variants']}, "
           f"экземпляров: {c['objects']} (перепродавались: {c['objects_resold']})")
-    print("качество сопоставления (F1): " + ", ".join(f"{k} {v['f1']:.3f}" for k, v in q.items()))
+    if q:
+        print("качество сопоставления (F1): " + ", ".join(f"{k} {v['f1']:.3f}" for k, v in q.items()))
     print(f"уведомлений для примера пользователя: {sum(1 for n in d['alerts']['notifications'] if n['reason'])}, в очереди проверки: {d['pipeline']['review_queue']}")
-    print(f"готово за {d['meta']['built_seconds']} с → web/index.html")
+    print(f"готово за {d['meta']['built_seconds']} с → web/{out}")

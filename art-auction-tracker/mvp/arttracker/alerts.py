@@ -13,7 +13,8 @@ MONTHS = ["января", "февраля", "марта", "апреля", "ма�
 
 
 def money(x: float, cur: str = "USD") -> str:
-    return f"{SYMBOL[cur]}{int(round(x)):,}".replace(",", " ")
+    n = f"{int(round(x)):,}".replace(",", "\u202f")
+    return f"{n}\u202f₽" if cur == "RUB" else f"{SYMBOL[cur]}{n}"
 
 
 def ru_date(iso: str) -> str:
@@ -72,7 +73,8 @@ def build_alerts(upcoming, variants, valuations, match, emb, lots_by_variant):
         return {"collection": [], "watchlist": [], "notifications": []}
     own_variant = up_variants[0]
     own = variants[own_variant]
-    own_vec = centroid([emb[l.image_ref] for l in lots_by_variant[own_variant]])
+    vecs = [emb[l.image_ref] for l in lots_by_variant[own_variant] if l.image_ref in emb]
+    own_vec = centroid(vecs) if vecs else None
     collection = [{"variant": own_variant, "label": "пример",
                    "note": f"лист 37/{own['edition']}" if own.get("edition") else "оттиск из частного собрания"}]
 
@@ -91,7 +93,7 @@ def build_alerts(upcoming, variants, valuations, match, emb, lots_by_variant):
         if l.qualifier:
             continue
         vid = match.variant_of[l.lot_id]
-        sim = cosine(emb[l.image_ref], own_vec)
+        sim = cosine(emb[l.image_ref], own_vec) if own_vec and l.image_ref in emb else 0.0
         v = variants[vid]
         val = valuations.get(vid)
         h = HOUSES[l.source]

@@ -16,7 +16,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import combinations
 
-from .normalize import Lot, tokens
+from .normalize import UNIQUE_MEDIA, Lot, tokens
 
 WORK_THRESHOLD = 0.85
 REVIEW_LOW = 0.5
@@ -77,16 +77,28 @@ def pair_features(a: Lot, b: Lot, emb: dict) -> dict:
         "ref": ref,
         "title": round(title_similarity(a.title, b.title), 3),
         "size": None if (d := size_difference(a, b)) is None else round(d, 4),
-        "image": round(cosine(emb[a.image_ref], emb[b.image_ref]), 4),
+        "image": round(cosine(emb[a.image_ref], emb[b.image_ref]), 4)
+        if a.image_ref in emb and b.image_ref in emb else None,
         "year": year,
     }
 
 
-def work_probability(f: dict) -> float:
+def work_probability(f: dict, unique: bool = False) -> float:
+    if unique:
+        # Уникальные картины: названия типовые («Морской пейзаж»), разные картины часто
+        # называются одинаково, а одна картина в Москве и Лондоне — по-разному.
+        # Решают изображение и размер; название и год лишь добавляют уверенности.
+        if f["image"] is None:
+            z = -3.0 + 3.0 * f["title"] + 3.0 * (f["ref"] == 1)  # без фото: название + точный размер
+        else:
+            z = 60.0 * (f["image"] - 0.95) + 1.5 * f["title"]
+        z += (0.0 if f["size"] is None else 2.0 * (f["size"] <= 0.01) - 80.0 * max(0.0, f["size"] - 0.02))
+        z -= 1.5 * min(f["year"], 3)
+        return 1 / (1 + math.exp(-z))
     z = (-4.0
          + 3.0 * (f["ref"] == 1) - 5.0 * (f["ref"] == -1)
          + 2.5 * f["title"]
-         + 12.0 * (f["image"] - 0.3)
+         + 12.0 * ((0.3 if f["image"] is None else f["image"]) - 0.3)
          + (0.0 if f["size"] is None else 1.5 * (f["size"] <= 0.01) - 60.0 * max(0.0, f["size"] - 0.04))
          - 0.8 * min(f["year"], 5))
     return 1 / (1 + math.exp(-z))
@@ -149,7 +161,9 @@ def match(lots: list[Lot], emb: dict) -> MatchResult:
         for a, b in combinations(group, 2):
             res.pairs_compared += 1
             f = pair_features(a, b, emb)
-            p = work_probability(f)
+            p = work_probability(f, unique=medium in UNIQUE_MEDIA)
+            if f["image"] is None and medium not in UNIQUE_MEDIA:
+                p = min(p, 0.8)  # без изображения тиражную работу не объединяем автоматически
             if p >= REVIEW_LOW:
                 scored.append(PairScore(a.lot_id, b.lot_id, p, f))
         for s in sorted(scored, key=lambda s: -s.prob):
@@ -177,13 +191,15 @@ def match(lots: list[Lot], emb: dict) -> MatchResult:
         keys = {l.variant_key for l in group} - {"ed"}
         centroids = {}
         for k in keys:
-            vecs = [emb[l.image_ref] for l in group if l.variant_key == k]
+            vecs = [emb[l.image_ref] for l in group if l.variant_key == k and l.image_ref in emb]
+            if not vecs:
+                continue
             c = [sum(xs) / len(vecs) for xs in zip(*vecs)]
             n = math.sqrt(sum(x * x for x in c))
             centroids[k] = [x / n for x in c]
         for l in group:
             k = l.variant_key
-            if k == "ed" and centroids and not l.edition_number:
+            if k == "ed" and centroids and not l.edition_number and l.image_ref in emb:
                 # Вариант не указан в описании: берём ближайший по изображению.
                 k = max(centroids, key=lambda c: cosine(emb[l.image_ref], centroids[c]))
                 res.variant_inferred.add(l.lot_id)
@@ -195,6 +211,10 @@ def match(lots: list[Lot], emb: dict) -> MatchResult:
         if not vid.startswith("x:"):
             variants[vid].append(by_id[lid])
     for vid, group in variants.items():
+        if group[0].medium_class in UNIQUE_MEDIA:  # уникальная работа: вариант и экземпляр совпадают
+            for l in group:
+                res.object_of[l.lot_id] = f"{vid}|o:{min(x.lot_id for x in group)}"
+            continue
         uf = UnionFind([l.lot_id for l in group], {l.lot_id: l.sale_id for l in group})
         numbered = [l for l in group if l.edition_number]
         by_number = defaultdict(list)
@@ -206,6 +226,8 @@ def match(lots: list[Lot], emb: dict) -> MatchResult:
         loose = [l for l in group if not l.edition_number]
         pairs, doubtful = [], []
         for a, b in combinations(loose, 2):
+            if a.image_ref not in emb or b.image_ref not in emb:
+                continue  # без изображений оттиски одной доски не различить
             c = cosine(emb[a.image_ref], emb[b.image_ref])
             d = size_difference(a, b)
             if d is not None and d > 0.008:

@@ -301,9 +301,10 @@ def make_world(rng: random.Random):
 def sale_calendar(rng: random.Random):
     """Торги: у каждого дома несколько сессий графики в год."""
     sales = []
-    for hid, h in HOUSES.items():
-        per_year = {"christies": 4, "sothebys": 4, "phillips": 3, "bonhams": 3, "heritage": 3,
-                    "dorotheum": 3, "ketterer": 2}[hid]
+    sessions = {"christies": 4, "sothebys": 4, "phillips": 3, "bonhams": 3, "heritage": 3,
+                "dorotheum": 3, "ketterer": 2}
+    for hid, per_year in sessions.items():
+        h = HOUSES[hid]
         for y in YEARS:
             for k in range(per_year):
                 d = date(y, 1, 1) + timedelta(days=int((k + 0.5) / per_year * 360 + rng.randint(-20, 20)))
@@ -483,6 +484,11 @@ def generate(out_dir: Path, seed: int = SEED):
                     rec["dimensions_raw"] = None
                 if status == "sold" and not after:
                     obj.sales.append(yf)
+
+    # Российский рынок генерируется отдельным модулем со своим зерном, чтобы данные
+    # зарубежного рынка не менялись.
+    from .generate_ru import generate_ru
+    generate_ru(seed + 1, TODAY, EMB_DIM, est_round, nice_round, raws, truth, images)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "raw_lots.jsonl", "w", encoding="utf-8") as f:

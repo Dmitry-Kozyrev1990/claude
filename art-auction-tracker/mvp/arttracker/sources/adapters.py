@@ -197,6 +197,41 @@ def fetch_fx(client: PoliteClient, start: str = "2015-01-01") -> dict:
     return {"source": "ECB", "daily": daily, "annual": annual}
 
 
+# ---------------- Банк России: курс рубля ----------------
+# ECB прекратил публиковать курс рубля в 2022 году, поэтому рубль берём у ЦБ РФ.
+
+CBR_USD = "R01235"
+
+
+def cbr_url(start: str, end: str) -> str:
+    d1 = "/".join(reversed(start.split("-")))
+    d2 = "/".join(reversed(end.split("-")))
+    return f"https://www.cbr.ru/scripts/XML_dynamic.asp?date_req1={d1}&date_req2={d2}&VAL_NM_RQ={CBR_USD}"
+
+
+def parse_cbr_xml(body: bytes) -> dict[str, float]:
+    """Дата (ISO) → рублей за 1 доллар."""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(body)
+    out = {}
+    for rec in root.iter("Record"):
+        d, mth, y = rec.get("Date").split(".")
+        nominal = float((rec.findtext("Nominal") or "1").replace(",", "."))
+        out[f"{y}-{mth}-{d}"] = float(rec.findtext("Value").replace(",", ".")) / nominal
+    return out
+
+
+def fetch_rub(client: PoliteClient, start: str = "2015-01-01", end: str | None = None) -> dict:
+    from datetime import date as _d
+    end = end or _d.today().isoformat()
+    rub_per_usd = parse_cbr_xml(client.get(cbr_url(start, end)).body)
+    by_year = {}
+    for d, v in rub_per_usd.items():
+        by_year.setdefault(int(d[:4]), []).append(1 / v)
+    annual = {y: round(sum(v) / len(v), 6) for y, v in sorted(by_year.items())}
+    return {"source": "Банк России", "daily_rub_per_usd": rub_per_usd, "annual": {"RUB": annual}}
+
+
 # ---------------- JSON-LD на страницах лотов ----------------
 
 class _JsonLdParser(HTMLParser):

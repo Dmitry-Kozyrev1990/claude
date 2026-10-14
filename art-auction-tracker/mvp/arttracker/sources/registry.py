@@ -38,6 +38,10 @@ REGISTRY: dict[str, SourcePolicy] = {p.id: p for p in [
         "https://www.ecb.europa.eu/stats/ecb_statistics/governance_and_quality_framework/html/usage_policy.en.html",
         ["data-api.ecb.europa.eu"], min_interval=1.0, note="Ежедневные курсы валют к евро.", documented_api=True),
     SourcePolicy(
+        "cbr", "Банк России: курсы валют", "fx", "approved", "официальные курсы, указание источника",
+        "https://www.cbr.ru/development/sxml/", ["www.cbr.ru", "cbr.ru"], min_interval=1.0, documented_api=True,
+        note="Курс рубля: ECB перестал его публиковать в 2022 году."),
+    SourcePolicy(
         "artprice", "Artprice", "auction", "blocked", "платная база данных",
         "https://www.artprice.com", ["artprice.com"],
         note="Платная база: автоматическое извлечение не разрешено условиями. Используется только "
@@ -62,6 +66,24 @@ REGISTRY: dict[str, SourcePolicy] = {p.id: p for p in [
         ["mutualart.com"], min_interval=5.0,
         note="Прямой конкурент по функции Watchlist. Используется как образец структуры; данные — только "
              "после письменного разрешения или лицензии."),
+    # Российский рынок: дома и агрегаторы. Лучший путь — партнёрство и архив по договору
+    # (python -m arttracker.collect import-archive), а не сбор со страниц.
+    # Адреса сайтов не заполнены намеренно: их нужно сверить при проверке условий.
+    *[SourcePolicy(i, n, "auction", "pending_review", "условия сайта не проверены", "", [],
+                   min_interval=5.0, note=f"{what}. Предложить партнёрство: архив результатов по договору "
+                                          "(docs/letters/partnership_ru.md). Сайт и условия — уточнить.")
+      for i, n, what in [
+          ("litfond", "Литфонд", "Русская живопись и графика"),
+          ("sovcom", "Совком", "Русское искусство"),
+          ("vladey", "Vladey", "Неофициальное и современное искусство"),
+          ("gelos", "Гелос", "Живопись и графика"),
+          ("imperia", "Империя", "Русская живопись"),
+      ]],
+    SourcePolicy(
+        "artinvestment", "ARTinvestment.RU", "auction", "blocked", "база данных под защитой ГК РФ ст. 1333–1336",
+        "https://artinvestment.ru/", ["artinvestment.ru"],
+        note="Конкурент. Ценовая база защищена правом изготовителя базы данных: не копируем. "
+             "Возможна только лицензия по договору."),
     # Агрегаторы: через каждый доступны сотни и тысячи аукционных домов.
     *[SourcePolicy(i, n, "auction", "pending_review", "условия сайта не проверены", f"https://www.{d}/", [d],
                    min_interval=5.0, note=f"Агрегатор торгов: {what}. Проверить условия; лучше договориться о партнёрстве.")

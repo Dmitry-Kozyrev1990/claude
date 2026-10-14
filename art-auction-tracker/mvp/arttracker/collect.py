@@ -4,6 +4,8 @@
     python -m arttracker.collect artists                # справочник художников из Wikidata
     python -m arttracker.collect works                  # эталонные карточки работ (AIC и The Met)
     python -m arttracker.collect fx                     # курсы валют ECB
+    python -m arttracker.collect fx-cbr                 # курс рубля Банка России
+    python -m arttracker.collect import-archive F --mapping M   # архив партнёра по договору
     python -m arttracker.collect discover               # поиск аукционных домов, музеев и коллекций в Wikidata
     python -m arttracker.collect lots URL_FILE          # лоты со страниц одобренных аукционных сайтов
 
@@ -46,7 +48,7 @@ def save(path: Path, data):
     print(f"→ {path.relative_to(DATA.parent)}")
 
 
-CATEGORY_RU = {"auction_house": "Аукционные дома", "art_museum": "Художественные музеи",
+CATEGORY_RU = {"auction_house": "Аукционные дома", "ru_auction_house": "Аукционные дома России", "art_museum": "Художественные музеи",
                "bank_collection": "Коллекции банков", "private_collection": "Частные коллекции"}
 
 
@@ -130,6 +132,33 @@ def cmd_fx(_):
         f"{c} {min(v.values()):.3f}–{max(v.values()):.3f}" for c, v in fx["annual"].items()))
 
 
+def cmd_fx_cbr(_):
+    from .sources.adapters import fetch_rub
+    fx = fetch_rub(PoliteClient(registry.get("cbr")))
+    save(REF / "fx_cbr.json", fx)
+    a = fx["annual"]["RUB"]
+    print(f"дней с курсом: {len(fx['daily_rub_per_usd'])}; среднегодовой курс, руб. за $: "
+          + ", ".join(f"{y}: {1 / v:.1f}" for y, v in a.items()))
+
+
+def cmd_import_archive(args):
+    from .archive import ArchiveError, import_archive
+    try:
+        rep = import_archive(Path(args.file), Path(args.mapping))
+    except ArchiveError as e:
+        sys.exit(f"Импорт остановлен: {e}")
+    print(f"строк: {rep['rows']}, принято: {rep['accepted']}, отклонено: {rep['rejected']}")
+    for reason, n in rep["rejected_reasons"]:
+        print(f"  отклонено «{reason}»: {n}")
+    print("распознано: " + ", ".join(f"{k} {round(v * 100)}%" for k, v in rep["coverage"].items()))
+    print(f"годы: {', '.join(f'{y}: {n}' for y, n in rep['years'].items())}")
+    if rep["new_artists"]:
+        print(f"художников нет в справочнике: {rep['new_artists']} (будут добавлены при сборке), например: "
+              + "; ".join(n for n, _ in rep["top_new_artists"][:5]))
+    print("отчёт: data/imported/*.report.json; сборка на импортированных данных: "
+          "python -m arttracker.build --source imported")
+
+
 def cmd_lots(args):
     approved = {d: p for p in registry.approved_auction_sources() for d in p.domains}
     urls = [u.strip() for u in Path(args.url_file).read_text().splitlines() if u.strip()]
@@ -172,6 +201,11 @@ def main(argv=None):
     d.add_argument("--category", action="append", choices=list(CATEGORIES))
     d.add_argument("--max-pages", type=int, default=20)
     d.set_defaults(fn=cmd_discover)
+    sub.add_parser("fx-cbr").set_defaults(fn=cmd_fx_cbr)
+    ia = sub.add_parser("import-archive")
+    ia.add_argument("file")
+    ia.add_argument("--mapping", required=True)
+    ia.set_defaults(fn=cmd_import_archive)
     lots = sub.add_parser("lots")
     lots.add_argument("url_file")
     lots.set_defaults(fn=cmd_lots)

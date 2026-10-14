@@ -109,7 +109,7 @@ def liquidity(lots: list[Lot], today: date) -> dict:
     sell_through = len(sold) / len(offered) if offered else 0.0
     per_year = len(offered) / 3
     houses = len({l.source for l in recent})
-    score = 100 * (0.5 * sell_through + 0.3 * min(1.0, per_year / 40) + 0.2 * min(1.0, houses / len(HOUSES)))
+    score = 100 * (0.5 * sell_through + 0.3 * min(1.0, per_year / 40) + 0.2 * min(1.0, houses / 6))
     return {"sell_through": round(sell_through, 3), "lots_per_year": round(per_year, 1),
             "houses": houses, "score": round(score)}
 

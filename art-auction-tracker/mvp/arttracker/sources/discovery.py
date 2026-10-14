@@ -20,6 +20,8 @@ SPARQL = "https://query.wikidata.org/sparql"
 # Категория → условие на ?item в SPARQL.
 CATEGORIES = {
     "auction_house": '?cls rdfs:label "auction house"@en. ?item wdt:P31/wdt:P279* ?cls.',
+    "ru_auction_house": ('?cls rdfs:label "auction house"@en. ?item wdt:P31/wdt:P279* ?cls; wdt:P17 ?ru. '
+                         '?ru rdfs:label "Russia"@en.'),
     "art_museum": '?cls rdfs:label "art museum"@en. ?item wdt:P31/wdt:P279* ?cls.',
     # Коллекции, которыми владеет банк (или его подкласс): Deutsche Bank, UBS и т. п.
     "bank_collection": ('?bank_cls rdfs:label "bank"@en. ?owner wdt:P31/wdt:P279* ?bank_cls. '

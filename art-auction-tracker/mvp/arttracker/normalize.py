@@ -13,6 +13,10 @@ QUALIFIERS = [
     (r"^(attributed to|zugeschrieben)\s+", "attributed"),
     (r"^(circle of|umkreis von?)\s+", "circle"),
     (r"^(school of|schule des?)\s+", "school"),
+    (r"^(копия с работы|копия с картины|по мотивам|подражатель|последователь)\s+", "after"),
+    (r"^(приписывается)\s+", "attributed"),
+    (r"^(круг)\s+", "circle"),
+    (r"^(школа)\s+", "school"),
 ]
 ORDINALS = {"first": "I", "second": "II", "third": "III", "fourth": "IV", "fifth": "V",
             "sixth": "VI", "seventh": "VII"}
@@ -23,7 +27,8 @@ def unaccent(s: str) -> str:
 
 
 def tokens(s: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+", unaccent(s).lower())
+    """Слова латиницей и кириллицей; «й» → «и», «ё» → «е» (через unaccent)."""
+    return re.findall(r"[a-z0-9а-я]+", unaccent(s).lower())
 
 
 # ---------- художник ----------
@@ -55,12 +60,26 @@ def parse_artist(raw: str) -> tuple[str | None, str | None]:
             qualifier, s = q, re.sub(pattern, "", s, flags=re.I)
             break
     s = re.sub(r"\(.*?\)", "", s).strip()
+    s = re.sub(r"[.,]?\s*(?:род\.\s*)?\d{4}\s*[–-]\s*\d{4}\.?$", "", s).strip()  # «АЙВАЗОВСКИЙ И.К. 1817–1900»
     if "," in s:  # «Kusama, Yayoi» → «Yayoi Kusama»
         last, first = [x.strip() for x in s.split(",", 1)]
         s = f"{first} {last}"
     key = " ".join(tokens(s))
     if key in ARTIST_KEYS:
         return ARTIST_KEYS[key], qualifier
+    # Инициалы и падежи: «И.К. Айвазовский», «круг Айвазовского» — ищем по фамилии.
+    core = {t for t in key.split() if len(t) > 1 and not t.isdigit()}
+    if core:
+        def stem(t):  # падежи фамилий: «Рериха», «Шишкина», «Айвазовского»
+            if len(t) > 4 and t[-1] in "аяуюе":
+                t = t[:-1]
+            return t[:6]
+        hits = {aid for k, aid in ARTIST_KEYS.items() if core <= set(k.split())}
+        if len(hits) != 1:
+            hits = {aid for k, aid in ARTIST_KEYS.items()
+                    if {stem(t) for t in core} <= {stem(t) for t in k.split()}}
+        if len(hits) == 1:
+            return hits.pop(), qualifier
     # Нечёткое совпадение по множеству слов.
     toks = set(key.split())
     best, best_score = None, 0.0
@@ -77,7 +96,7 @@ def parse_artist(raw: str) -> tuple[str | None, str | None]:
 def parse_year(text: str | None) -> tuple[int | None, int | None, bool]:
     if not text:
         return None, None, False
-    circa = bool(re.search(r"\b(circa|c\.|ca\.|um)\s*\d", text, re.I))
+    circa = bool(re.search(r"\b(circa|c\.|ca\.|um|около|ок\.)\s*\d|\d{4}-е", text, re.I))
     m = re.search(r"(1[4-9]\d{2}|20\d{2})(?:\s*[-–]\s*(\d{2,4}))?", text)
     if not m:
         return None, None, circa
@@ -113,14 +132,18 @@ def parse_dimensions(raw: str | None) -> tuple[float | None, float | None]:
     """Высота и ширина в сантиметрах. Метрика в строке важнее дюймов."""
     if not raw:
         return None, None
-    m = re.search(rf"({NUM})\s*(?:x|×|by|:)\s*({NUM})\s*(mm|cm)", raw, re.I)
+    m = re.search(rf"({NUM})\s*(?:x|×|х|by|:)\s*({NUM})\s*(mm|cm|мм|см)", raw, re.I)
     if m:
-        k = 0.1 if m.group(3).lower() == "mm" else 1.0
+        k = 0.1 if m.group(3).lower() in ("mm", "мм") else 1.0
         return round(_num(m.group(1)) * k, 1), round(_num(m.group(2)) * k, 1)
     frac = r"\d+(?:[\s-]+\d+/\d+)?"
     m = re.search(rf"({frac})\s*(?:x|by)\s*({frac})\s*(?:in\b|in\.|inches)", raw, re.I)
     if m:
         return round(_inch(m.group(1)) * 2.54, 1), round(_inch(m.group(2)) * 2.54, 1)
+    # Российские каталоги часто пишут «60 х 80» без единиц: это сантиметры.
+    m = re.search(rf"({NUM})\s*[x×х]\s*({NUM})\s*$", raw.strip(), re.I)
+    if m:
+        return round(_num(m.group(1)), 1), round(_num(m.group(2)), 1)
     return None, None
 
 
@@ -136,12 +159,17 @@ def parse_amounts(raw: str | None) -> list[int]:
 # ---------- описание: техника, состояние, тираж, каталог ----------
 
 MEDIUM_CLASSES = [
-    ("screenprint", r"screenprint|silkscreen|serigraph|siebdruck"),
-    ("lithograph", r"lithograph"),
+    ("screenprint", r"screenprint|silkscreen|serigraph|siebdruck|шелкограф|сериграф"),
+    ("lithograph", r"lithograph|литограф"),
     ("stencil", r"pochoir"),
-    ("intaglio", r"etching|engraving|drypoint|burin|aquatint|radierung|kupferstich|kaltnadel|aquatinta"),
-    ("woodcut", r"woodcut|holzschnitt"),
+    ("intaglio", r"etching|engraving|drypoint|burin|aquatint|radierung|kupferstich|kaltnadel|aquatinta|офорт|гравюр"),
+    ("woodcut", r"woodcut|holzschnitt|ксилограф|линогравюр"),
+    # Уникальные работы: живопись и работы на бумаге (в том числе сокращения «Х., м.», «Б., акв.»).
+    ("painting", r"\boil\b|tempera|холст|масло|темпер|[хк]\.,?\s*[мт]\.|öl auf"),
+    ("drawing", r"watercolou?r|gouache|pencil|charcoal|pastel|ink\b|акварел|гуаш|карандаш|пастел|тушь|"
+                r"уголь|б\.,?\s*(?:акв|гуаш|кар|тушь)"),
 ]
+UNIQUE_MEDIA = {"painting", "drawing"}
 
 REF_PATTERNS = [
     (r"\bF\.?\s*&\s*S\.?\s*(II\.\d+)", "F&S {}"),
@@ -193,7 +221,7 @@ def parse_state(text: str) -> str | None:
 def parse_signed(text: str) -> bool | None:
     if re.search(r"\b(unsigned|unsigniert)\b", text, re.I):
         return False
-    if re.search(r"\b(signed|signiert)\b", text, re.I):
+    if re.search(r"\b(signed|signiert)\b|подпис", text, re.I):
         return True
     return None
 
