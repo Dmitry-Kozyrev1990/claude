@@ -2,7 +2,9 @@
 
 Правила, которые клиент соблюдает всегда:
 - источник должен быть одобрен в реестре (registry.py), домен — в его списке;
-- robots.txt проверяется до первого запроса к хосту;
+- robots.txt проверяется до первого запроса к хосту. Исключение — официальные API
+  (documented_api): robots.txt адресован поисковым роботам, а для API действуют его
+  собственные правила (User-Agent с контактом, лимиты), они записаны в реестре;
 - не чаще одного запроса в min_interval секунд на хост, повтор с паузой при 429/5xx;
 - бот представляется в User-Agent с контактом;
 - каждый ответ сохраняется в сыром виде (data/raw/<источник>/…), чтобы при смене
@@ -41,6 +43,7 @@ class SourcePolicy:
     min_interval: float = 1.0
     note: str = ""
     extra_headers: dict = field(default_factory=dict)
+    documented_api: bool = False  # официальный API для программного доступа
 
 
 @dataclass
@@ -58,16 +61,25 @@ class Response:
         return self.body.decode("utf-8", errors="replace")
 
 
-Transport = Callable[[str, dict], tuple[int, bytes]]
+Transport = Callable[[str, dict], tuple]  # (status, body) или (status, body, headers)
 
 
-def urllib_transport(url: str, headers: dict) -> tuple[int, bytes]:
+def urllib_transport(url: str, headers: dict) -> tuple[int, bytes, dict]:
     req = urllib.request.Request(url, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return r.status, r.read()
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.status, r.read(), dict(r.headers)
     except urllib.error.HTTPError as e:
-        return e.code, e.read() or b""
+        return e.code, e.read() or b"", dict(e.headers or {})
+
+
+def retry_after(headers: dict, default: float) -> float:
+    """Пауза, которую просит сервер (Retry-After в секундах), не больше 5 минут."""
+    v = {k.lower(): v for k, v in (headers or {}).items()}.get("retry-after")
+    try:
+        return min(300.0, max(default, float(v)))
+    except (TypeError, ValueError):
+        return default
 
 
 class PoliteClient:
@@ -80,7 +92,7 @@ class PoliteClient:
         self.transport = transport or urllib_transport
         self.raw_dir = (raw_dir or RAW_DIR) / policy.id
         self.sleep = sleep
-        self.check_robots = check_robots
+        self.check_robots = check_robots and not policy.documented_api
         self.max_retries = max_retries
         self._robots: dict[str, urllib.robotparser.RobotFileParser] = {}
         self._last: dict[str, float] = {}
@@ -101,7 +113,15 @@ class PoliteClient:
         base = f"{parsed.scheme}://{parsed.netloc}"
         if base not in self._robots:
             rp = urllib.robotparser.RobotFileParser()
-            status, body = self._throttled(base + "/robots.txt", parsed.hostname)
+            try:
+                status, body = self._throttled(base + "/robots.txt", parsed.hostname)
+            except OSError as e:
+                # robots.txt недоступен по сети (например, редирект на закрытый домен).
+                # Официальный API создан для программного доступа — продолжаем;
+                # для обычных сайтов недоступный robots.txt означает «нельзя».
+                if not self.policy.documented_api:
+                    raise SourceNotAllowed(f"robots.txt недоступен ({e}); сбор с {base} остановлен")
+                status, body = 404, b""
             if status >= 400:
                 rp.parse([])          # нет robots.txt — ограничений не объявлено
             else:
@@ -114,7 +134,9 @@ class PoliteClient:
         if wait > 0:
             self.sleep(wait)
         self._last[host] = time.monotonic()
-        return self.transport(url, self.headers)
+        res = self.transport(url, self.headers)
+        self._last_headers = res[2] if len(res) > 2 else {}
+        return res[0], res[1]
 
     def cache_path(self, url: str) -> Path:
         return self.raw_dir / (hashlib.sha256(url.encode()).hexdigest()[:24] + ".json")
@@ -132,7 +154,8 @@ class PoliteClient:
             status, body = self._throttled(url, host)
             if status not in (429, 500, 502, 503, 504) or attempt == self.max_retries:
                 break
-            self.sleep(delay)
+            # 429 — сервер просит сбавить темп: ждём, сколько он скажет (по умолчанию 60 с).
+            self.sleep(retry_after(self._last_headers, 60.0) if status == 429 else delay)
             delay *= 2
         resp = Response(url, status, body, time.time())
         if status == 200:

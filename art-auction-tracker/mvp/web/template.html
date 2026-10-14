@@ -252,7 +252,7 @@ dl { margin: 0; }
     <nav class="tabs" id="tabs" aria-label="Разделы"></nav>
   </div>
 </header>
-<div class="note"><p><strong>Демо на синтетических данных.</strong> Художники и названия работ реальные; торги, лоты и цены смоделированы генератором, чтобы показать работу конвейера. Курсы валют и ставки премий приближённые.</p></div>
+<div class="note"><p id="demo-note"><strong>Демо на синтетических данных.</strong> Художники и названия работ реальные; торги, лоты и цены смоделированы генератором, чтобы показать работу конвейера. Курсы валют и ставки премий приближённые.</p></div>
 <main id="view"></main>
 
 <script>const DATA = /*__DATA__*/null;</script>
@@ -536,7 +536,7 @@ PAGES.artist = () => {
   const lots = DATA.lots.filter(l => l.a === a.id && l.s !== "upcoming").sort((x, y) => y.d.localeCompare(x.d)).slice(0, 10);
   return `
   <div class="pick" role="group" aria-label="Художник">${ARTIST_IDS.map(id => `<button data-go="artist" data-arg="${id}" aria-pressed="${id === a.id}">${esc(ART[id].name_ru)}</button>`).join("")}</div>
-  <section class="page-head"><p class="eyebrow">${esc(a.segment)} · ${esc(a.life)}</p><h1>${esc(a.name_ru)} <span class="muted" style="font-weight:500;font-style:italic">${esc(a.name)}</span></h1></section>
+  <section class="page-head"><p class="eyebrow">${esc(a.segment)} · ${esc(a.life)}</p><h1>${esc(a.name_ru)} <span class="muted" style="font-weight:500;font-style:italic">${esc(a.name)}</span></h1>${wikiLine(a.id)}</section>
   <section class="kpis">
     ${kpi(nf.format(Math.round(a.index[ly].value)), `Индекс ${ly}`, "2015 = 100")}
     ${kpi(pct(a.cagr_all), "Рост в год с 2015", `за 3 года: ${pct(a.cagr_3y)}`)}
@@ -579,6 +579,11 @@ PAGES.artist = () => {
     ${lotsTable(lots, true)}
   </section>`;
 };
+function wikiLine(id) {
+  const w = (DATA.reference?.artists || {})[id];
+  if (!w) return "";
+  return `<p class="muted" style="font-size:13px">Wikidata <a href="https://www.wikidata.org/wiki/${esc(w.wikidata_id)}" target="_blank" rel="noopener">${esc(w.wikidata_id)}</a>${w.ulan_id ? ` · Getty ULAN <a href="https://vocab.getty.edu/page/ulan/${esc(w.ulan_id)}" target="_blank" rel="noopener">${esc(w.ulan_id)}</a>` : ""} · ${w.names.length} вариантов имени для сопоставления: <span class="mono">${esc(w.names.slice(0, 6).join(" · "))}${w.names.length > 6 ? " …" : ""}</span></p>`;
+}
 AFTER.artist = () => {
   const a = ART[state.artist];
   const pts = Object.keys(a.index).map(Number).sort((x, y) => x - y).map(y => ({ x: y, y: a.index[y].value, lo: a.index[y].lo, hi: a.index[y].hi, n: a.index[y].n }));
@@ -636,6 +641,7 @@ PAGES.work = () => {
     <div class="panel-head"><h2>Как эту работу называют источники</h2><p>Все написания сведены к одной карточке</p></div>
     <div class="aliases">${Object.entries(sources).map(([t, hs]) => `<span class="alias" title="${esc([...hs].join(", "))}">${esc(t)}</span>`).join("")}</div>
   </section>
+  ${museumPanel(state.variant)}
   ${pairs.length ? `<section class="panel"><div class="panel-head"><h2>Повторные продажи одного экземпляра</h2><p>Основа для расчёта доходности</p></div>
     <div class="table-wrap"><table><thead><tr><th>Экземпляр</th><th>Первая продажа</th><th>Повторная</th><th class="r">Лет</th><th class="r">Доходность в год</th></tr></thead><tbody>${pairs.map(p => {
     const f = LOTS.get(p.from), t = LOTS.get(p.to);
@@ -644,6 +650,21 @@ PAGES.work = () => {
   <section class="panel"><div class="panel-head"><h2>Лоты</h2><p>${state.allLots ? lots.length : Math.min(12, lots.length)} из ${lots.length}</p></div>${lotsTable(state.allLots ? lots : lots.slice(0, 12), false)}
     ${lots.length > 12 ? `<button class="btn ghost" id="w-more" style="justify-self:start">${state.allLots ? "Свернуть" : "Показать все " + lots.length}</button>` : ""}</section>`;
 };
+const MUSEUM = { artic: "Art Institute of Chicago", met: "The Met, Нью-Йорк" };
+function museumPanel(vid) {
+  const m = (DATA.reference?.museum || {})[vid];
+  if (!m) return "";
+  const v = VAR[vid], ok = m.filter(x => x.size_ok !== false), bad = m.filter(x => x.size_ok === false);
+  return `<section class="panel">
+    <div class="panel-head"><h2>Эталон в музейных коллекциях</h2><p>Реальные данные открытых API музеев</p></div>
+    <p class="muted" style="font-size:13px">Карточки найдены по автору и названию, затем сверены по размеру с каталогом (${v.size ? `${String(v.size[0]).replace(".", ",")} × ${String(v.size[1]).replace(".", ",")} см` : "размер не указан"}). Музейные изображения станут эталоном для сравнения фотографий лотов.</p>
+    <div class="table-wrap"><table><thead><tr><th>Музей</th><th>Название в музее</th><th>Дата</th><th class="r">Размер, см</th><th>Сверка</th></tr></thead><tbody>${[...ok, ...bad].map(x => `
+      <tr><td style="white-space:nowrap">${esc(MUSEUM[x.source] || x.source)}</td>
+      <td><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a></td><td>${esc(x.date || "—")}</td>
+      <td class="r num">${x.size ? `${String(x.size[0]).replace(".", ",")} × ${String(x.size[1]).replace(".", ",")}` : "—"}</td>
+      <td>${x.size_ok === true ? '<span class="chip sig-in">размер совпал</span>' : x.size_ok === false ? '<span class="chip sig-above">другая работа: размер не совпал</span>' : '<span class="chip">нет размера</span>'}</td></tr>`).join("")}</tbody></table></div>
+  </section>`;
+}
 AFTER.work = () => {
   document.getElementById("w-artist").addEventListener("change", e => go("work", VAR_IDS.indexOf(ART[e.target.value].variants[0])));
   document.getElementById("w-var").addEventListener("change", e => go("work", e.target.value));
@@ -821,6 +842,7 @@ PAGES.pipeline = () => {
       <button class="btn" data-go="alerts" style="justify-self:start">Открыть ленту уведомлений</button>
     </div></section>
   </div>
+  ${openSourcesPanel()}
   <section class="panel">
     <h2>Что смоделировано в демо и что нужно для продукта</h2>
     <ul class="list">
@@ -831,6 +853,19 @@ PAGES.pipeline = () => {
     </ul>
   </section>`;
 };
+function openSourcesPanel() {
+  const r = DATA.reference || {}, c = r.counts || {};
+  if (!r.fx_source && !c.artists && !c.museum_cards) return "";
+  return `<section class="panel">
+    <div class="panel-head"><h2>Подключённые открытые источники</h2><p>Настоящие данные, собраны сборщиком с соблюдением правил источников</p></div>
+    <div class="flow">
+      ${r.fx_source ? `<div><b>${nf.format(r.fx_source.days)}</b><span>дней курсов ECB, по ${fdate(r.fx_source.last)}</span></div>` : ""}
+      ${c.artists ? `<div><b>${c.artists}</b><span>художников из Wikidata с ID Getty ULAN</span></div>` : ""}
+      ${c.museum_cards ? `<div><b>${c.museum_cards}</b><span>музейных карточек Chicago и The Met</span></div>` : ""}
+      ${c.works_with_museum ? `<div><b>${c.works_with_museum}</b><span>работ каталога нашли эталон в музеях</span></div>` : ""}
+    </div>
+  </section>`;
+}
 AFTER.pipeline = () => {
   document.querySelectorAll("[data-pa]").forEach(b => b.addEventListener("click", () => {
     state.pipeArtist = b.dataset.pa;
@@ -849,5 +884,12 @@ function drawPipe() {
   });
 }
 
+(() => {
+  const r = DATA.reference || {}, real = [];
+  if (r.fx_source) real.push(`курсы валют ECB (${nf.format(r.fx_source.days)} дней)`);
+  if (r.counts?.artists) real.push(`справочник художников Wikidata`);
+  if (r.counts?.museum_cards) real.push(`${r.counts.museum_cards} музейных карточек Art Institute of Chicago и The Met`);
+  if (real.length) document.getElementById("demo-note").innerHTML = `<strong>Демо: торги, лоты и цены синтетические.</strong> Художники и названия работ реальные. Из открытых источников подключены настоящие данные: ${real.join(", ")}. Ставки премий приближённые.`;
+})();
 render();
 </script>

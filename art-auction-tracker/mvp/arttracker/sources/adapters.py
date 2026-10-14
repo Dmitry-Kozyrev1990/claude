@@ -12,6 +12,7 @@ import csv
 import io
 import json
 import re
+import sys
 from dataclasses import asdict, dataclass, field
 from html.parser import HTMLParser
 from urllib.parse import quote, urlencode
@@ -69,15 +70,22 @@ def parse_wikidata(payload: dict) -> list[ArtistRecord]:
     return list(out.values())
 
 
-def fetch_artists(client: PoliteClient, names: list[str]) -> list[ArtistRecord]:
+def fetch_artists(client: PoliteClient, names: list[str], batch: int = 6) -> list[ArtistRecord]:
     records = []
-    for i in range(0, len(names), 20):
-        q = wikidata_query(names[i:i + 20])
+    for i in range(0, len(names), batch):
+        q = wikidata_query(names[i:i + batch])
         url = f"{WIKIDATA_SPARQL}?{urlencode({'query': q, 'format': 'json'})}"
         resp = client.get(url)
         if resp.status == 200:
             records += parse_wikidata(resp.json())
-    return records
+        else:
+            print(f"Wikidata ответил {resp.status} на пакет {i // batch + 1}: {names[i:i + batch]}", file=sys.stderr)
+    seen, unique = set(), []
+    for r in records:
+        if r.wikidata_id not in seen:
+            seen.add(r.wikidata_id)
+            unique.append(r)
+    return unique
 
 
 # ---------------- музейные API ----------------
@@ -98,6 +106,8 @@ class ReferenceWork:
     width_cm: float | None
     image_url: str | None
     public_domain: bool | None
+    artist_ulan: str | None = None
+    artist_wikidata: str | None = None
 
     def to_dict(self):
         return asdict(self)
@@ -133,21 +143,28 @@ def parse_met_object(d: dict) -> ReferenceWork:
     y1, y2 = d.get("objectBeginDate"), d.get("objectEndDate")
     if not y1:
         y1, y2, _ = parse_year(d.get("objectDate"))
+    artist = next((c for c in d.get("constituents") or [] if c.get("role") == "Artist"), {})
+    ulan = (artist.get("constituentULAN_URL") or "").rstrip("/").rsplit("/", 1)[-1] or None
+    wd = (artist.get("constituentWikidata_URL") or "").rstrip("/").rsplit("/", 1)[-1] or None
     return ReferenceWork(
         "met", str(d["objectID"]), d.get("objectURL") or "", d.get("artistDisplayName") or None,
         d.get("title") or "", d.get("objectDate"), y1, y2, d.get("medium"), d.get("dimensions"), h, w,
-        d.get("primaryImageSmall") or None, d.get("isPublicDomain"))
+        d.get("primaryImageSmall") or None, d.get("isPublicDomain"), ulan, wd)
+
+
+MET = "https://collectionapi.metmuseum.org/public/collection"
 
 
 def search_met(client: PoliteClient, query: str, limit: int = 20) -> list[ReferenceWork]:
-    base = "https://collectionapi.metmuseum.org/public/collection/v1"
-    resp = client.get(f"{base}/search?hasImages=true&q={quote(query)}")
+    # Поиск v1 закрыт музеем 2026-10-01; v1.1 работает с постраничной выдачей.
+    resp = client.get(f"{MET}/v1.1/search?hasImages=true&q={quote(query)}&limit={limit}")
     if resp.status != 200:
+        print(f"The Met: поиск ответил {resp.status}", file=sys.stderr)
         return []
     ids = (resp.json().get("objectIDs") or [])[:limit]
     out = []
     for oid in ids:
-        r = client.get(f"{base}/objects/{oid}")
+        r = client.get(f"{MET}/v1/objects/{oid}")
         if r.status == 200:
             out.append(parse_met_object(r.json()))
     return out

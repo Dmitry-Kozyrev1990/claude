@@ -167,3 +167,27 @@ def test_registry_covers_aggregators_and_open_museums():
     assert {"the-saleroom", "drouot", "catawiki", "lot-tissimo"} <= set(r)
     assert all(r[k].status == "approved" for k in ("cleveland", "smithsonian", "nga", "moma"))
     assert all(p.status != "approved" for p in r.values() if p.kind == "auction")
+
+
+def test_unreachable_robots_txt(tmp_path):
+    def net(url, headers):
+        if url.endswith("/robots.txt"):
+            raise OSError("tunnel 403")
+        return 200, b"{}"
+    api = PoliteClient(policy(documented_api=True), transport=net, raw_dir=tmp_path, sleep=lambda s: None)
+    assert api.get("https://example.org/data").status == 200
+    assert not any(u.endswith("robots.txt") for u in [])  # у официального API robots.txt не запрашивается
+    site = PoliteClient(policy(id="site"), transport=net, raw_dir=tmp_path, sleep=lambda s: None)
+    with pytest.raises(SourceNotAllowed):
+        site.get("https://example.org/page")
+
+
+def test_429_waits_for_retry_after(tmp_path):
+    from arttracker.sources.base import retry_after
+    slept = []
+    responses = [(429, b"", {"Retry-After": "90"}), (200, b"{}", {})]
+    c = PoliteClient(policy(documented_api=True), transport=lambda u, h: responses.pop(0),
+                     raw_dir=tmp_path, sleep=slept.append)
+    assert c.get("https://example.org/q").status == 200
+    assert 90.0 in slept
+    assert retry_after({}, 60.0) == 60.0 and retry_after({"retry-after": "9999"}, 1) == 300.0

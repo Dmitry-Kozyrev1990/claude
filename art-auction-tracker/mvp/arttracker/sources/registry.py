@@ -21,21 +21,22 @@ REGISTRY: dict[str, SourcePolicy] = {p.id: p for p in [
     SourcePolicy(
         "wikidata", "Wikidata", "reference", "approved", "CC0 1.0",
         "https://www.wikidata.org/wiki/Wikidata:Licensing", ["query.wikidata.org", "www.wikidata.org"],
-        min_interval=1.0, note="Художники: имена на разных языках, даты жизни, ID в Getty ULAN."),
+        min_interval=1.0, note="Художники: имена на разных языках, даты жизни, ID в Getty ULAN. Правила "
+                               "сервиса запросов: https://www.mediawiki.org/wiki/Wikidata_Query_Service/User_Manual", documented_api=True),
     SourcePolicy(
         "artic", "Art Institute of Chicago API", "reference", "approved",
         "данные CC0; изображения public domain — CC0", "https://api.artic.edu/docs/#terms",
         ["api.artic.edu", "www.artic.edu"], min_interval=1.0,
         note="Эталонные карточки работ и изображения для сравнения.",
-        extra_headers={"AIC-User-Agent": "LotlineBot (research prototype)"}),
+        extra_headers={"AIC-User-Agent": "LotlineBot (research prototype)"}, documented_api=True),
     SourcePolicy(
         "met", "The Met Collection API", "reference", "approved", "Open Access CC0 (для public domain)",
         "https://metmuseum.github.io/", ["collectionapi.metmuseum.org"], min_interval=0.5,
-        note="Эталонные карточки работ и изображения для сравнения."),
+        note="Эталонные карточки работ и изображения для сравнения.", documented_api=True),
     SourcePolicy(
         "ecb", "ECB Data Portal", "fx", "approved", "повторное использование с указанием источника",
         "https://www.ecb.europa.eu/stats/ecb_statistics/governance_and_quality_framework/html/usage_policy.en.html",
-        ["data-api.ecb.europa.eu"], min_interval=1.0, note="Ежедневные курсы валют к евро."),
+        ["data-api.ecb.europa.eu"], min_interval=1.0, note="Ежедневные курсы валют к евро.", documented_api=True),
     SourcePolicy(
         "artprice", "Artprice", "auction", "blocked", "платная база данных",
         "https://www.artprice.com", ["artprice.com"],
@@ -76,11 +77,11 @@ REGISTRY: dict[str, SourcePolicy] = {p.id: p for p in [
     SourcePolicy(
         "cleveland", "Cleveland Museum of Art Open Access", "reference", "approved", "CC0",
         "https://openaccess-api.clevelandart.org/", ["openaccess-api.clevelandart.org"], min_interval=1.0,
-        note="Открытый API коллекции. Адаптер пока не написан."),
+        note="Открытый API коллекции. Адаптер пока не написан.", documented_api=True),
     SourcePolicy(
         "smithsonian", "Smithsonian Open Access", "reference", "approved", "CC0 (для материалов Open Access)",
         "https://www.si.edu/openaccess", ["api.si.edu"], min_interval=1.0,
-        note="Нужен бесплатный ключ api.data.gov. Адаптер пока не написан."),
+        note="Нужен бесплатный ключ api.data.gov. Адаптер пока не написан.", documented_api=True),
     SourcePolicy(
         "nga", "National Gallery of Art Open Data", "reference", "approved", "CC0",
         "https://github.com/NationalGalleryOfArt/opendata", ["github.com", "raw.githubusercontent.com"],

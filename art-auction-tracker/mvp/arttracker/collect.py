@@ -20,6 +20,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .catalog import ARTISTS
+from .normalize import parse_artist
 from .sources import registry
 from .sources.adapters import fetch_artists, fetch_fx, parse_lot_page, search_artic, search_met
 from .sources.base import PoliteClient, SourceNotAllowed
@@ -30,10 +31,12 @@ REF = DATA / "reference"
 
 # Что искать в музейных коллекциях: по одной строке на работу из каталога демо.
 WORK_QUERIES = [
-    "Rembrandt Three Crosses", "Rembrandt Hundred Guilder Print", "Rembrandt Self-Portrait Leaning on a Stone Sill",
-    "Rembrandt The Shell", "Dürer Melencolia", "Dürer Knight, Death and the Devil", "Dürer Saint Jerome in his Study",
-    "Dürer Adam and Eve", "Goya sleep of reason", "Goya Disparate de miedo", "Picasso Minotauromachy",
-    "Picasso Frugal Repast", "Matisse Jazz Icarus", "Warhol Marilyn", "Warhol Campbell's Soup", "Lichtenstein Sweet Dreams Baby",
+    ("rembrandt", "Rembrandt Three Crosses"), ("rembrandt", "Rembrandt Hundred Guilder Print"),
+    ("rembrandt", "Rembrandt self-portrait leaning stone sill"), ("rembrandt", "Rembrandt shell conus"),
+    ("durer", "Dürer Melencolia"), ("durer", "Dürer Knight Death Devil"), ("durer", "Dürer Saint Jerome study"),
+    ("durer", "Dürer Adam and Eve"), ("goya", "Goya sleep of reason monsters"), ("goya", "Goya Disparate miedo"),
+    ("picasso", "Picasso Minotauromachy"), ("picasso", "Picasso Frugal Repast"), ("matisse", "Matisse Jazz Icarus"),
+    ("warhol", "Warhol Marilyn"), ("warhol", "Warhol Campbell's Soup"), ("lichtenstein", "Lichtenstein Sweet Dreams Baby"),
 ]
 
 
@@ -79,8 +82,10 @@ def cmd_discover(args):
 
 def cmd_artists(_):
     client = PoliteClient(registry.get("wikidata"))
-    names = [a["name"] for a in ARTISTS.values()] + [al for a in ARTISTS.values() for al in a["aliases"][:1]]
+    names = [n for a in ARTISTS.values() for n in [a["name"], *a["aliases"]] if " " in n or n == a["name"]]
     recs = fetch_artists(client, sorted(set(names)))
+    if not recs:
+        sys.exit("Wikidata не вернул ни одной записи; справочник не изменён.")
     out = []
     for r in recs:
         aid = next((k for k, a in ARTISTS.items() if r.name in [a["name"], *a["aliases"]]), None)
@@ -90,24 +95,39 @@ def cmd_artists(_):
 
 
 def cmd_works(args):
-    out = []
+    out, rejected = [], 0
     for name, search in (("artic", search_artic), ("met", search_met)):
         try:
             client = PoliteClient(registry.get(name))
         except SourceNotAllowed as e:
             print(e, file=sys.stderr)
             continue
-        for q in WORK_QUERIES[: args.limit_queries]:
-            out += [w.to_dict() for w in search(client, q, limit=args.per_query)]
-    save(REF / "reference_works.json", out)
-    print(f"эталонных карточек: {len(out)}, с изображением: {sum(1 for w in out if w['image_url'])}")
+        for artist_id, q in WORK_QUERIES[: args.limit_queries]:
+            for w in search(client, q, limit=args.per_query):
+                # Поиск музеев полнотекстовый: оставляем только работы нужного художника.
+                if w.artist and parse_artist(w.artist)[0] == artist_id:
+                    out.append({"artist_id": artist_id, "query": q, **w.to_dict()})
+                else:
+                    rejected += 1
+    seen, unique = set(), []
+    for w in out:
+        if (w["source"], w["source_id"]) not in seen:
+            seen.add((w["source"], w["source_id"]))
+            unique.append(w)
+    if not unique:
+        sys.exit("Музеи не вернули ни одной подходящей карточки; справочник не изменён.")
+    save(REF / "reference_works.json", unique)
+    by_src = Counter(w["source"] for w in unique)
+    print(f"эталонных карточек: {len(unique)} ({', '.join(f'{k}: {v}' for k, v in by_src.items())}), "
+          f"с изображением: {sum(1 for w in unique if w['image_url'])}; отсеяно чужих авторов: {rejected}")
 
 
 def cmd_fx(_):
     fx = fetch_fx(PoliteClient(registry.get("ecb")))
     save(REF / "fx.json", fx)
-    print("среднегодовые курсы к доллару: " + ", ".join(
-        f"{c} {min(v)}–{max(v)}" for c, v in fx["annual"].items()))
+    days = len(fx["daily"]["EUR"])
+    print(f"дней с курсами: {days}; среднегодовые курсы к доллару: " + "; ".join(
+        f"{c} {min(v.values()):.3f}–{max(v.values()):.3f}" for c, v in fx["annual"].items()))
 
 
 def cmd_lots(args):
@@ -144,7 +164,7 @@ def main(argv=None):
     sub.add_parser("status").set_defaults(fn=cmd_status)
     sub.add_parser("artists").set_defaults(fn=cmd_artists)
     w = sub.add_parser("works")
-    w.add_argument("--per-query", type=int, default=5)
+    w.add_argument("--per-query", type=int, default=10)
     w.add_argument("--limit-queries", type=int, default=len(WORK_QUERIES))
     w.set_defaults(fn=cmd_works)
     sub.add_parser("fx").set_defaults(fn=cmd_fx)

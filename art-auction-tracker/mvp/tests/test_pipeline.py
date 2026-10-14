@@ -2,6 +2,7 @@ import math
 
 import pytest
 
+from arttracker.catalog import fx
 from arttracker.analytics import cagr, estimate_bias, hedonic_index
 from arttracker.matching import pairwise_quality, title_similarity
 from arttracker.normalize import (normalize, parse_artist, parse_dimensions, parse_edition, parse_ref,
@@ -60,8 +61,9 @@ def test_normalize_converts_to_usd_and_splits_premium():
     lot = normalize(raw)
     assert (lot.est_low, lot.est_high) == (80000, 120000)
     assert lot.hammer_local == 100000
-    assert lot.hammer_usd == 118000           # курс EUR 2018 = 1.18
-    assert lot.total_usd == round(100000 * 1.28 * 1.18)  # + премия 28%
+    rate = fx("EUR", 2018)                    # приближённый курс или ECB, если собран
+    assert lot.hammer_usd == round(100000 * rate)
+    assert lot.total_usd == round(100000 * 1.28 * rate)  # + премия 28%
     assert lot.edition_number == 12 and lot.catalogue_ref == "F&S II.91"
 
 

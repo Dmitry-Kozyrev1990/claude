@@ -31,6 +31,53 @@ def load_jsonl(path):
         return [json.loads(line) for line in f]
 
 
+def load_reference(variants: dict) -> dict:
+    """Справочники из открытых источников: Wikidata, музейные карточки, курсы ECB."""
+    from .catalog import REFERENCE_DIR
+    from .matching import title_similarity
+    out = {"artists": {}, "museum": {}, "fx_source": None, "counts": {}}
+    path = REFERENCE_DIR / "artists.json"
+    if path.exists():
+        for r in json.loads(path.read_text(encoding="utf-8")):
+            if r.get("artist_id"):
+                out["artists"][r["artist_id"]] = {k: r[k] for k in ("wikidata_id", "ulan_id", "birth_year", "death_year")} | {
+                    "names": sorted({r["name"], *r.get("labels", {}).values(), *r.get("aliases", [])[:12]})}
+        out["counts"]["artists"] = len(out["artists"])
+    path = REFERENCE_DIR / "reference_works.json"
+    if path.exists():
+        refs = json.loads(path.read_text(encoding="utf-8"))
+        out["counts"]["museum_cards"] = len(refs)
+        for vid, v in variants.items():
+            work_titles = [v["title"], *v["titles_seen"]]
+            matches = []
+            for r in refs:
+                if r["artist_id"] != v["artist"]:
+                    continue
+                sim = max(title_similarity(t, r["title"]) for t in work_titles)
+                if sim < 0.6:
+                    continue
+                size_ok = None
+                if v.get("size") and r.get("height_cm") and r.get("width_cm"):
+                    a, b = sorted(v["size"]), sorted([r["height_cm"], r["width_cm"]])
+                    size_ok = all(abs(x - y) / max(x, y) <= 0.05 for x, y in zip(a, b))
+                matches.append({"source": r["source"], "title": r["title"], "date": r["date_display"],
+                                "size": [r["height_cm"], r["width_cm"]] if r.get("height_cm") else None,
+                                "size_ok": size_ok, "url": r["url"], "public_domain": r.get("public_domain")})
+            if matches:
+                matches.sort(key=lambda m: (m["size_ok"] is not True, m["source"]))
+                out["museum"][vid] = matches[:6]
+        out["counts"]["works_with_museum"] = len({VARIANT_WORK(v) for v in out["museum"]})
+    path = REFERENCE_DIR / "fx.json"
+    if path.exists():
+        fx = json.loads(path.read_text(encoding="utf-8"))
+        out["fx_source"] = {"name": "ECB", "days": len(fx["daily"]["EUR"]), "last": max(fx["daily"]["EUR"])}
+    return out
+
+
+def VARIANT_WORK(vid: str) -> str:
+    return vid.split("|")[0]
+
+
 def run() -> dict:
     if not (DATA / "raw_lots.jsonl").exists():
         generate.generate(DATA)
@@ -119,6 +166,9 @@ def run() -> dict:
         review.append({"level": s.level, "prob": round(s.prob, 3), "features": s.features, "a": s.a, "b": s.b})
 
     n = len(lots)
+    # 6. Открытые справочники (если собраны: python -m arttracker.collect …)
+    reference = load_reference(variants)
+
     lots_out = []
     for l in lots:
         r = l.raw
@@ -150,6 +200,7 @@ def run() -> dict:
             },
         },
         "houses": HOUSES,
+        "reference": reference,
         "artists": artists_out,
         "market": market,
         "variants": variants,
