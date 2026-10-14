@@ -1,0 +1,853 @@
+<title>Lotline</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Аналитика аукционных цен на тиражную графику: индексы, ликвидность, оценка и уведомления. Демо на синтетических данных.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Spectral:ital,wght@0,500;0,600;1,500&display=swap">
+<style>
+/* Layout: рабочий кабинет аналитика — липкая шапка с вкладками, колонка до 1180px,
+   экраны собраны из панелей; сырые строки каталогов набраны моноширинным, как в печатном каталоге. */
+:root {
+  --bg: #f2f3f5;
+  --surface: #ffffff;
+  --sunken: #eaecf0;
+  --ink: #151922;
+  --ink-2: #444c5c;
+  --muted: #687082;
+  --line: #dce0e7;
+  --accent: #1d4f91;      /* берлинская лазурь — печатная краска офорта */
+  --accent-soft: #e2eaf5;
+  --accent-ink: #ffffff;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --above: #2a78d6; --within: #c3c8d1; --below: #e34948; --unsold: #8b93a3;
+  --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+  --tip-bg: #151922; --tip-ink: #f2f3f5;
+  --f-display: "Spectral", Georgia, "Times New Roman", serif;
+  --f-body: "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1116; --surface: #161a21; --sunken: #1c212a; --ink: #e9ecf1; --ink-2: #bcc3cf;
+    --muted: #8d96a6; --line: #2a313c; --accent: #82aaea; --accent-soft: #1c2a3e; --accent-ink: #0e1116;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --above: #3987e5; --within: #4a515d; --below: #e66767; --unsold: #6f7787;
+    --tip-bg: #e9ecf1; --tip-ink: #0e1116;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1116; --surface: #161a21; --sunken: #1c212a; --ink: #e9ecf1; --ink-2: #bcc3cf;
+  --muted: #8d96a6; --line: #2a313c; --accent: #82aaea; --accent-soft: #1c2a3e; --accent-ink: #0e1116;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --above: #3987e5; --within: #4a515d; --below: #e66767; --unsold: #6f7787;
+  --tip-bg: #e9ecf1; --tip-ink: #0e1116;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 30px; line-height: 1.15; }
+h2 { font-size: 21px; line-height: 1.25; }
+h3 { font-size: 17px; line-height: 1.3; }
+p { margin: 0; }
+a { color: var(--accent); }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.num { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--f-mono); font-size: 12.5px; }
+.muted { color: var(--muted); }
+.eyebrow { font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+
+/* ---------- шапка ---------- */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top-in { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; align-items: center; gap: 24px; min-height: 58px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 10px; padding-block: 10px; }
+.brand b { font-family: var(--f-display); font-size: 23px; font-weight: 600; letter-spacing: -0.02em; }
+.brand b i { font-style: italic; font-weight: 500; color: var(--accent); }
+.brand span { color: var(--muted); font-size: 13px; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { border: 0; background: none; padding: 18px 12px 16px; cursor: pointer; color: var(--ink-2); white-space: nowrap; border-bottom: 2px solid transparent; font-weight: 500; font-size: 14px; }
+.tab:hover { color: var(--ink); }
+.tab[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); }
+
+.note { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 0; }
+.note p { font-size: 13px; color: var(--ink-2); background: var(--sunken); border-radius: 8px; padding: 9px 12px; }
+.note strong { color: var(--ink); font-weight: 600; }
+
+main { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 22px 64px; display: grid; gap: 18px; }
+
+/* ---------- панели и сетки ---------- */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; min-width: 0; display: grid; gap: 14px; align-content: start; }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.panel-head p { color: var(--muted); font-size: 13px; }
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 18px; }
+.grid-2e { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 860px) { .grid-2, .grid-2e { grid-template-columns: minmax(0, 1fr); } }
+
+.page-head { display: grid; gap: 6px; }
+.page-head p { color: var(--ink-2); max-width: 68ch; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.kpi { background: var(--surface); padding: 16px 18px; display: grid; gap: 2px; align-content: start; }
+.kpi .v { font-family: var(--f-display); font-size: 27px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.kpi .l { font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+.kpi .s { font-size: 12px; color: var(--muted); }
+
+/* ---------- графики ---------- */
+.chart { position: relative; width: 100%; min-width: 0; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { fill: var(--muted); font: 11.5px var(--f-body); font-variant-numeric: tabular-nums; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { stroke: var(--line); }
+.tip { position: absolute; pointer-events: none; background: var(--tip-bg); color: var(--tip-ink); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.45; min-width: 150px; max-width: 280px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.18); z-index: 5; }
+.tip b { font-weight: 600; }
+.tip .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.tip .sw { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; flex: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend i.dot { width: 9px; height: 9px; border-radius: 50%; }
+.legend i.band { height: 10px; border-radius: 2px; opacity: 0.35; }
+.legend i.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important; height: 2px; }
+
+/* ---------- таблицы ---------- */
+.table-wrap { overflow-x: auto; margin-inline: -4px; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--ink); }
+th[aria-sort] { color: var(--accent); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+td.r, th.r { text-align: right; }
+tr.link { cursor: pointer; }
+tr.link:hover td { background: var(--sunken); }
+.cell-title { display: grid; gap: 1px; min-width: 180px; }
+.cell-title small { color: var(--muted); font-size: 12px; }
+
+/* ---------- элементы ---------- */
+.chip { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 500; background: var(--sunken); color: var(--ink-2); white-space: nowrap; }
+.chip.accent { background: var(--accent-soft); color: var(--accent); }
+.chip.up { color: var(--good); }
+.chip.down { color: var(--crit); }
+.sig-below { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--ink); }
+.sig-above { background: color-mix(in srgb, var(--crit) 13%, transparent); color: var(--ink); }
+.sig-below::before { content: "▼"; color: var(--good); font-size: 9px; }
+.sig-above::before { content: "▲"; color: var(--crit); font-size: 9px; }
+.sig-in::before { content: "●"; color: var(--muted); font-size: 8px; }
+.pos { color: var(--good); }
+.neg { color: var(--crit); }
+
+.pick { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.pick button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 13px; cursor: pointer; white-space: nowrap; font-size: 13.5px; }
+.pick button:hover { border-color: var(--accent); }
+.pick button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field label { font-size: 12px; color: var(--muted); font-weight: 500; }
+select, input[type="number"] { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; max-width: 100%; }
+select:hover, input:hover { border-color: var(--muted); }
+.btn { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-weight: 500; font-size: 13.5px; }
+.btn.ghost { background: transparent; color: var(--accent); }
+
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 22px; }
+.facts div { display: grid; gap: 1px; }
+.facts dt { font-size: 12px; color: var(--muted); }
+.facts dd { margin: 0; font-weight: 500; }
+dl { margin: 0; }
+
+.bias { display: flex; height: 26px; border-radius: 6px; overflow: hidden; gap: 2px; background: var(--surface); }
+.bias div { min-width: 2px; }
+.bias-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; font-size: 12.5px; }
+.bias-legend div { display: grid; gap: 1px; }
+.bias-legend b { font-size: 18px; font-family: var(--f-display); font-weight: 600; font-variant-numeric: tabular-nums; }
+.bias-legend span { display: inline-flex; gap: 6px; align-items: center; color: var(--ink-2); }
+.bias-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.hatch { background-image: repeating-linear-gradient(135deg, var(--unsold) 0 2px, transparent 2px 5px); }
+
+.meter { height: 6px; border-radius: 3px; background: var(--sunken); overflow: hidden; width: 70px; display: inline-block; vertical-align: middle; margin-right: 8px; }
+.meter i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.card { border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 8px; background: var(--surface); cursor: pointer; text-align: left; align-content: start; }
+.card:hover { border-color: var(--accent); }
+.card h3 { font-size: 16px; }
+.card .row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--ink-2); }
+
+.aliases { display: flex; flex-wrap: wrap; gap: 6px; }
+.alias { font-family: var(--f-mono); font-size: 12px; background: var(--sunken); border-radius: 6px; padding: 4px 8px; color: var(--ink-2); }
+
+.raw { font-family: var(--f-mono); font-size: 12px; line-height: 1.55; background: var(--sunken); border-radius: 8px; padding: 10px 12px; color: var(--ink-2); overflow-wrap: anywhere; display: grid; gap: 2px; }
+.raw b { color: var(--ink); font-weight: 500; }
+.raw .src { font-family: var(--f-body); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+
+/* ---------- оценка ---------- */
+.range { position: relative; height: 64px; margin: 6px 8px 0; }
+.range .track { position: absolute; left: 0; right: 0; top: 30px; height: 2px; background: var(--line); }
+.range .band { position: absolute; top: 22px; height: 18px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 4px; }
+.range .p50 { position: absolute; top: 14px; width: 2px; height: 34px; background: var(--accent); }
+.range .tick { position: absolute; top: 25px; width: 1px; height: 12px; background: var(--muted); opacity: 0.6; }
+.range .lab { position: absolute; top: 46px; font-size: 12px; color: var(--muted); transform: translateX(-50%); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.range .lab.top { top: -4px; color: var(--accent); font-weight: 600; }
+.big-value { font-family: var(--f-display); font-size: 38px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+
+/* ---------- уведомления ---------- */
+.phone { background: var(--sunken); border-radius: 18px; padding: 14px; display: grid; gap: 10px; align-content: start; max-height: 720px; overflow-y: auto; }
+.bot { display: flex; align-items: center; gap: 10px; padding: 2px 4px 8px; border-bottom: 1px solid var(--line); }
+.bot .av { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-family: var(--f-display); font-weight: 600; font-size: 17px; font-style: italic; }
+.bot small { display: block; color: var(--muted); font-size: 12px; }
+.msg { background: var(--surface); border-radius: 12px 12px 12px 4px; padding: 10px 12px; display: grid; gap: 6px; font-size: 13.5px; max-width: 520px; box-shadow: 0 1px 0 var(--line); }
+.msg .h { font-weight: 600; }
+.msg .meta { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+.msg time { color: var(--muted); font-size: 11.5px; }
+.empty { color: var(--muted); font-size: 13.5px; padding: 18px; text-align: center; border: 1px dashed var(--line); border-radius: var(--r); }
+.own { border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 6px; }
+.toggle-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.toggle-list button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 11px; cursor: pointer; font-size: 13px; }
+.toggle-list button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+.toggle-list button[aria-pressed="true"]::before { content: "✓ "; }
+.watch-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13.5px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.watch-item button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; }
+.watch-item button:hover { color: var(--crit); }
+
+/* ---------- как это работает ---------- */
+.steps { display: grid; gap: 18px; counter-reset: step; }
+.step { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; }
+.step::before { counter-increment: step; content: counter(step); width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); display: grid; place-items: center; font-family: var(--f-display); font-weight: 600; font-size: 17px; background: var(--surface); }
+@media (max-width: 600px) { .step { grid-template-columns: minmax(0, 1fr); } .step::before { margin-bottom: -6px; } }
+.bars { display: grid; gap: 7px; }
+.bar-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 48px; gap: 10px; align-items: center; font-size: 13px; }
+.bar-row .b { height: 8px; background: var(--sunken); border-radius: 4px; overflow: hidden; }
+.bar-row .b i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+@media (max-width: 520px) { .bar-row { grid-template-columns: 110px minmax(0, 1fr) 42px; } }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.flow div { background: var(--sunken); border-radius: 8px; padding: 10px 12px; display: grid; gap: 1px; }
+.flow b { font-family: var(--f-display); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.flow span { font-size: 12.5px; color: var(--ink-2); }
+.list { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--ink-2); }
+.list strong { color: var(--ink); font-weight: 600; }
+
+@media (max-width: 600px) {
+  .kpis { grid-template-columns: 1fr 1fr; }
+  .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  h1 { font-size: 25px; }
+  .panel { padding: 16px; }
+  .kpi .v { font-size: 23px; }
+  .brand span { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .view-enter { animation: fade 0.25s ease-out; }
+  @keyframes fade { from { opacity: 0.4; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+}
+</style>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><b>Lot<i>line</i></b><span>аналитика аукционной графики</span></div>
+    <nav class="tabs" id="tabs" aria-label="Разделы"></nav>
+  </div>
+</header>
+<div class="note"><p><strong>Демо на синтетических данных.</strong> Художники и названия работ реальные; торги, лоты и цены смоделированы генератором, чтобы показать работу конвейера. Курсы валют и ставки премий приближённые.</p></div>
+<main id="view"></main>
+
+<script>const DATA = /*__DATA__*/null;</script>
+<script>
+"use strict";
+/* ================= данные и форматирование ================= */
+const ART = DATA.artists, VAR = DATA.variants, HOUSES = DATA.houses;
+const LOTS = new Map(DATA.lots.map(l => [l.id, l]));
+const LOTS_BY_VAR = new Map();
+for (const l of DATA.lots) { if (!LOTS_BY_VAR.has(l.v)) LOTS_BY_VAR.set(l.v, []); LOTS_BY_VAR.get(l.v).push(l); }
+const VAR_IDS = Object.keys(VAR).sort((a, b) => (VAR[a].artist + VAR[a].title).localeCompare(VAR[b].artist + VAR[b].title));
+const ARTIST_IDS = Object.keys(ART);
+const SEGMENTS = ["Старые мастера", "Модернизм", "Поп-арт", "Современное искусство"];
+const SEG_COLOR = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)"];
+const MEDIUM = { screenprint: "шелкография", lithograph: "литография", intaglio: "офорт, гравюра", stencil: "пошуар", woodcut: "ксилография" };
+const MONTHS = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+const nf = new Intl.NumberFormat("ru-RU");
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const usd = (x, short = false) => {
+  if (x == null) return "—";
+  if (short && x >= 1e6) return "$" + (x / 1e6).toFixed(x >= 1e7 ? 0 : 1).replace(".", ",") + " млн";
+  if (short && x >= 1e4) return "$" + Math.round(x / 1e3) + " тыс.";
+  return "$" + nf.format(Math.round(x));
+};
+const SYM = { USD: "$", GBP: "£", EUR: "€" };
+const money = (x, cur) => x == null ? "—" : SYM[cur] + nf.format(Math.round(x));
+const pct = (x, digits = 1) => x == null ? "—" : (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x * 100).toFixed(digits).replace(".", ",") + "%";
+const share = x => x == null ? "—" : Math.round(x * 100) + "%";
+const estText = l => money(l.el, l.cur) + (l.eh !== l.el ? "–" + nf.format(l.eh) : "");
+const fdate = iso => { const [y, m, d] = iso.split("-").map(Number); return `${d} ${MONTHS[m - 1]} ${y}`; };
+const dnum = iso => { const [y, m, d] = iso.split("-").map(Number); return y + (m - 1) / 12 + (d - 1) / 365; };
+const stateLabel = s => !s ? "" : /^[IVX]+$/.test(s) ? "состояние " + s :
+  ({ "1st edition": "1-е издание", "4th edition": "4-е издание", "Vollard edition": "издание Воллара", signed: "подписной тираж", unsigned: "неподписной тираж" }[s] || s);
+const varName = v => v.title + (v.variant ? " · " + stateLabel(v.variant) : "");
+const STATUS = { sold: "продан", bought_in: "не продан", withdrawn: "снят", upcoming: "предстоит" };
+const idxVal = (idx, y) => idx && idx[y] ? idx[y].value : null;
+const lastYear = idx => Math.max(...Object.keys(idx).map(Number));
+const today = DATA.meta.today;
+
+/* ================= хранилище (только удобство) ================= */
+const store = {
+  get(k, def) { try { const v = localStorage.getItem("lotline:" + k); return v == null ? def : JSON.parse(v); } catch { return def; } },
+  set(k, v) { try { localStorage.setItem("lotline:" + k, JSON.stringify(v)); } catch { } },
+};
+
+/* ================= графики ================= */
+function svgEl(w, h) { return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">`; }
+function niceTicks(min, max, count = 5) {
+  const span = max - min || 1, step0 = span / count, mag = 10 ** Math.floor(Math.log10(step0));
+  const step = [1, 2, 2.5, 5, 10].map(s => s * mag).find(s => span / s <= count) || mag * 10;
+  const out = []; for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) out.push(+v.toFixed(6));
+  return out;
+}
+function placeTip(tip, box, x, y) {
+  const tw = tip.offsetWidth, th = tip.offsetHeight, W = box.clientWidth;
+  let left = x + 14; if (left + tw > W) left = x - tw - 14; if (left < 0) left = Math.max(0, Math.min(W - tw, x - tw / 2));
+  tip.style.left = left + "px"; tip.style.top = Math.max(0, y - th / 2) + "px";
+}
+
+/* Линейный график: series = [{name, color, pts:[{x,y,lo,hi,n}], band, dash, label}] */
+function lineChart(box, { series, height = 300, yFmt = v => nf.format(v), xFmt = x => x, tipTitle = x => x, baseline = null }) {
+  const W = Math.max(300, box.clientWidth), H = height, m = { l: 44, r: 16, t: 12, b: 28 };
+  const direct = W >= 560;  // на узком экране подписи линий заменяет легенда
+  if (direct) m.r = 18 + 6.6 * Math.max(...series.filter(se => se.label !== false).map(se => (se.label || se.name).length));
+  const xs = [...new Set(series.flatMap(s => s.pts.map(p => p.x)))].sort((a, b) => a - b);
+  const allY = series.flatMap(s => s.pts.flatMap(p => [p.y, p.lo ?? p.y, p.hi ?? p.y]));
+  if (baseline != null) allY.push(baseline);
+  let y0 = Math.min(...allY), y1 = Math.max(...allY); const pad = (y1 - y0) * 0.08; y0 -= pad; y1 += pad;
+  const ticks = niceTicks(y0, y1, 5); y0 = Math.min(y0, ticks[0]); y1 = Math.max(y1, ticks[ticks.length - 1]);
+  const X = x => m.l + (x - xs[0]) / (xs[xs.length - 1] - xs[0] || 1) * (W - m.l - m.r);
+  const Y = y => m.t + (1 - (y - y0) / (y1 - y0)) * (H - m.t - m.b);
+  let s = svgEl(W, H);
+  for (const t of ticks) s += `<line class="grid" x1="${m.l}" x2="${W - m.r}" y1="${Y(t)}" y2="${Y(t)}"/><text x="${m.l - 8}" y="${Y(t) + 4}" text-anchor="end">${yFmt(t)}</text>`;
+  if (baseline != null) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(baseline)}" y2="${Y(baseline)}" stroke="var(--muted)" stroke-dasharray="2 3" stroke-width="1"/>`;
+  const every = W < 520 ? 2 : 1;
+  xs.forEach((x, i) => { if (i % every === 0) s += `<text x="${X(x)}" y="${H - 8}" text-anchor="middle">${xFmt(x)}</text>`; });
+  for (const se of series) {
+    if (se.band) {
+      const pts = se.pts.filter(p => p.lo != null);
+      const d = pts.map((p, i) => `${i ? "L" : "M"}${X(p.x)},${Y(p.hi)}`).join("") + pts.slice().reverse().map(p => `L${X(p.x)},${Y(p.lo)}`).join("") + "Z";
+      s += `<path d="${d}" fill="${se.color}" opacity="0.13"/>`;
+    }
+  }
+  const labels = [];
+  for (const se of series) {
+    const d = se.pts.map((p, i) => `${i ? "L" : "M"}${X(p.x)},${Y(p.y)}`).join("");
+    s += `<path d="${d}" fill="none" stroke="${se.color}" stroke-width="${se.width || 2}" stroke-linejoin="round" stroke-linecap="round" ${se.dash ? 'stroke-dasharray="5 4"' : ""}/>`;
+    const last = se.pts[se.pts.length - 1];
+    if (!se.dash) s += `<circle cx="${X(last.x)}" cy="${Y(last.y)}" r="4" fill="${se.color}" stroke="var(--surface)" stroke-width="2"/>`;
+    if (direct && se.label !== false) labels.push({ y: Y(last.y), x: X(last.x), text: se.label || se.name, color: se.color });
+  }
+  labels.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < 14) labels[i].y = labels[i - 1].y + 14;
+  for (const l of labels) s += `<text x="${l.x + 9}" y="${l.y + 4}" style="fill:var(--ink-2);font-weight:500">${esc(l.text)}</text>`;
+  s += `<line class="cross" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" stroke="var(--muted)" stroke-width="1" opacity="0"/>`;
+  s += `<g class="dots"></g><rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent" class="hit"/></svg>`;
+  box.innerHTML = s + `<div class="tip" hidden></div>`;
+  const svg = box.querySelector("svg"), tip = box.querySelector(".tip"), cross = svg.querySelector(".cross"), dots = svg.querySelector(".dots");
+  const move = ev => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * (W / r.width);
+    const x = xs.reduce((a, b) => Math.abs(X(b) - px) < Math.abs(X(a) - px) ? b : a);
+    cross.setAttribute("x1", X(x)); cross.setAttribute("x2", X(x)); cross.setAttribute("opacity", 0.6);
+    let rows = "", dd = "";
+    for (const se of series) {
+      const p = se.pts.find(p => p.x === x); if (!p) continue;
+      dd += `<circle cx="${X(x)}" cy="${Y(p.y)}" r="4.5" fill="${se.color}" stroke="var(--surface)" stroke-width="2"/>`;
+      rows += `<div class="row"><span><i class="sw" style="background:${se.color}"></i>${esc(se.name)}</span><b class="num">${yFmt(p.y)}</b></div>`;
+      if (p.lo != null && se.band) rows += `<div class="row" style="opacity:.75"><span>90% интервал</span><span class="num">${yFmt(p.lo)}–${yFmt(p.hi)}</span></div>`;
+      if (p.n != null && se.band) rows += `<div class="row" style="opacity:.75"><span>продаж в году</span><span class="num">${p.n}</span></div>`;
+    }
+    dots.innerHTML = dd; tip.innerHTML = `<b>${esc(tipTitle(x))}</b>${rows}`; tip.hidden = false;
+    placeTip(tip, box, X(x) * r.width / W, (ev.clientY - r.top));
+  };
+  svg.addEventListener("pointermove", move);
+  svg.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("opacity", 0); dots.innerHTML = ""; });
+}
+
+function sparkline(idx, w = 96, h = 26) {
+  const ys = Object.keys(idx).map(Number).sort((a, b) => a - b), vals = ys.map(y => idx[y].value);
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  const X = i => 2 + i / (ys.length - 1) * (w - 6), Y = v => 3 + (1 - (v - lo) / (hi - lo || 1)) * (h - 6);
+  const d = vals.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+  const area = d + `L${X(vals.length - 1)},${h}L${X(0)},${h}Z`;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true" style="display:block"><path d="${area}" fill="var(--accent)" opacity="0.1"/><path d="${d}" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linejoin="round"/><circle cx="${X(vals.length - 1)}" cy="${Y(vals[vals.length - 1])}" r="2.6" fill="var(--accent)"/></svg>`;
+}
+
+/* Хронология продаж работы: x — дата, y — цена (лог. шкала). */
+function timelineChart(box, lots, fair) {
+  const W = Math.max(300, box.clientWidth), H = 320, m = { l: 62, r: 16, t: 14, b: 28 };
+  const sold = lots.filter(l => l.s === "sold" && !l.q), unsold = lots.filter(l => l.s === "bought_in" && !l.q), up = lots.filter(l => l.s === "upcoming");
+  const prem = l => 1 + HOUSES[l.h].premium;
+  const vals = [...sold.map(l => l.tu), ...unsold.map(l => l.elu), ...up.flatMap(l => [l.elu * prem(l), l.ehu * prem(l)])];
+  if (fair) vals.push(fair.p10, fair.p90);
+  let lo = Math.log10(Math.min(...vals) * 0.85), hi = Math.log10(Math.max(...vals) * 1.15);
+  const x0 = 2015, x1 = 2027;
+  const X = x => m.l + (x - x0) / (x1 - x0) * (W - m.l - m.r), Y = v => m.t + (1 - (Math.log10(v) - lo) / (hi - lo)) * (H - m.t - m.b);
+  let s = svgEl(W, H);
+  const decades = []; for (let e = Math.floor(lo); e <= Math.ceil(hi); e++) for (const k of [1, 2, 5]) { const v = k * 10 ** e; if (Math.log10(v) >= lo && Math.log10(v) <= hi) decades.push(v); }
+  for (const v of decades) s += `<line class="grid" x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${usd(v, true)}</text>`;
+  for (let y = x0; y <= x1; y += W < 520 ? 3 : 1) s += `<text x="${X(y)}" y="${H - 8}" text-anchor="middle">${y}</text>`;
+  const tx = X(dnum(today));
+  s += `<line x1="${tx}" x2="${tx}" y1="${m.t}" y2="${H - m.b}" stroke="var(--muted)" stroke-dasharray="2 3"/><text x="${tx - 4}" y="${m.t + 10}" text-anchor="end">сегодня</text>`;
+  if (fair) s += `<rect x="${tx}" width="${W - m.r - tx}" y="${Y(fair.p90)}" height="${Y(fair.p10) - Y(fair.p90)}" fill="var(--accent)" opacity="0.12"/><line x1="${tx}" x2="${W - m.r}" y1="${Y(fair.p50)}" y2="${Y(fair.p50)}" stroke="var(--accent)" stroke-width="1.5"/>`;
+  // линии повторных продаж одного экземпляра
+  const byObj = new Map(); for (const l of sold) { if (!byObj.has(l.o)) byObj.set(l.o, []); byObj.get(l.o).push(l); }
+  const objPath = o => { const ls = (byObj.get(o) || []).slice().sort((a, b) => a.d.localeCompare(b.d)); return ls.length > 1 ? ls.map((l, i) => `${i ? "L" : "M"}${X(dnum(l.d))},${Y(l.tu)}`).join("") : ""; };
+  s += `<path class="obj-path" d="" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  const pts = [];
+  for (const l of unsold) { pts.push({ l, x: X(dnum(l.d)), y: Y(l.elu) }); s += `<circle cx="${X(dnum(l.d))}" cy="${Y(l.elu)}" r="4" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.5"/>`; }
+  for (const l of up) { const x = X(dnum(l.d)); pts.push({ l, x, y: Y(Math.sqrt(l.elu * l.ehu) * prem(l)) }); s += `<line x1="${x}" x2="${x}" y1="${Y(l.ehu * prem(l))}" y2="${Y(l.elu * prem(l))}" stroke="var(--s2)" stroke-width="5" stroke-linecap="round"/>`; }
+  for (const l of sold) { pts.push({ l, x: X(dnum(l.d)), y: Y(l.tu) }); s += `<circle cx="${X(dnum(l.d))}" cy="${Y(l.tu)}" r="4.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="1.5"/>`; }
+  s += `<rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent" class="hit"/></svg>`;
+  box.innerHTML = s + `<div class="tip" hidden></div>`;
+  const svg = box.querySelector("svg"), tip = box.querySelector(".tip"), path = svg.querySelector(".obj-path");
+  svg.addEventListener("pointermove", ev => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width, py = (ev.clientY - r.top) * H / r.height;
+    let best = null, bd = 18 ** 2;
+    for (const p of pts) { const d = (p.x - px) ** 2 + (p.y - py) ** 2; if (d < bd) { bd = d; best = p; } }
+    if (!best) { tip.hidden = true; path.setAttribute("d", ""); return; }
+    const l = best.l, h = HOUSES[l.h], sales = (byObj.get(l.o) || []).length;
+    path.setAttribute("d", l.s === "sold" ? objPath(l.o) : "");
+    tip.innerHTML = `<b>${esc(h.name)}, ${fdate(l.d)}</b><div>лот ${esc(l.n)} · ${STATUS[l.s]}</div>` +
+      (l.s === "sold" ? `<div class="row"><span>цена с премией</span><b class="num">${usd(l.tu)}</b></div>` : "") +
+      `<div class="row"><span>эстимейт</span><span class="num">${money(l.el, l.cur)}${l.eh !== l.el ? "–" + money(l.eh, l.cur) : ""}</span></div>` +
+      (l.ed ? `<div class="row"><span>экземпляр</span><span class="num">${l.ed}</span></div>` : "") +
+      (l.s === "sold" && sales > 1 ? `<div style="opacity:.75">этот экземпляр продавался ${sales} раза</div>` : "");
+    tip.hidden = false; placeTip(tip, box, best.x * r.width / W, best.y * r.height / H);
+  });
+  svg.addEventListener("pointerleave", () => { tip.hidden = true; path.setAttribute("d", ""); });
+}
+
+/* ================= маршрутизация ================= */
+const ROUTES = [
+  ["market", "Рынок"], ["artist", "Художники"], ["work", "Работа"], ["value", "Оценка"], ["alerts", "Уведомления"], ["pipeline", "Как это работает"],
+];
+const state = {
+  artist: store.get("artist", "banksy"),
+  variant: store.get("variant", null),
+  sort: { key: "cagr_all", dir: -1 },
+  watchArtists: store.get("watchArtists", DATA.alerts.watchlist.filter(w => w.type === "artist").map(w => w.id)),
+  watchWorks: store.get("watchWorks", DATA.alerts.watchlist.filter(w => w.type === "work").map(w => w.id)),
+  valueQuality: 1, valueVariant: null, pipeArtist: "hockney", allLots: false,
+};
+if (!ART[state.artist]) state.artist = "banksy";
+if (!VAR[state.variant]) state.variant = ART[state.artist].variants[0];
+state.watchWorks = state.watchWorks.filter(v => VAR[v]);
+
+function route() {
+  const h = (location.hash || "#market").slice(1);
+  const [name, arg] = h.split("-");
+  if (name === "artist" && ART[arg]) state.artist = arg;
+  if (name === "work" && arg && VAR_IDS[+arg]) state.variant = VAR_IDS[+arg];
+  return ROUTES.some(r => r[0] === name) ? name : "market";
+}
+function go(name, arg) { location.hash = arg != null ? `${name}-${arg}` : name; }
+function render() {
+  const name = route();
+  document.getElementById("tabs").innerHTML = ROUTES.map(([k, t]) => `<button class="tab" data-go="${k}" ${k === name ? 'aria-current="page"' : ""}>${t}</button>`).join("");
+  const view = document.getElementById("view");
+  view.className = "view-enter";
+  view.innerHTML = PAGES[name]();
+  void view.offsetWidth;
+  (AFTER[name] || (() => { }))();
+  store.set("artist", state.artist); store.set("variant", state.variant);
+}
+window.addEventListener("hashchange", () => { state.allLots = false; render(); window.scrollTo(0, 0); });
+document.addEventListener("click", ev => {
+  const g = ev.target.closest("[data-go]"); if (g) { go(g.dataset.go, g.dataset.arg); return; }
+});
+let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { const n = route(); (AFTER[n] || (() => { }))(); }, 150); });
+
+const kpi = (v, l, s) => `<div class="kpi"><span class="l">${l}</span><span class="v">${v}</span>${s ? `<span class="s">${s}</span>` : ""}</div>`;
+const sigChip = sig => !sig ? "" : sig.kind === "below_market" ? `<span class="chip sig-below">эстимейт ниже рынка на ${Math.round(sig.gap * 100)}%</span>` :
+  sig.kind === "above_market" ? `<span class="chip sig-above">эстимейт выше рынка на ${Math.round(-sig.gap * 100)}%</span>` : `<span class="chip sig-in">эстимейт в рынке</span>`;
+const PAGES = {}, AFTER = {};
+
+/* ================= Рынок ================= */
+PAGES.market = () => {
+  const c = DATA.meta.counts, mi = DATA.market.all, ly = lastYear(mi);
+  const growth = mi[ly].value / 100 - 1, cg = (mi[ly].value / 100) ** (1 / (ly - 2015)) - 1;
+  const q = DATA.pipeline.quality.object;
+  return `
+  <section class="page-head"><p class="eyebrow">Обзор рынка · на ${fdate(today)}</p>
+    <h1>Тиражная графика: 12 художников, 7 аукционных домов, 2015–2026</h1>
+    <p>Каждая продажа привязана к конкретной работе и конкретному экземпляру, поэтому индексы считаются по сопоставимым лотам, а не по средней цене.</p></section>
+  <section class="kpis">
+    ${kpi(nf.format(c.raw), "Лотов в базе", `из ${c.sources} источников, ${nf.format(c.sold)} продано`)}
+    ${kpi(usd(c.turnover, true), "Оборот продаж", "с премией покупателя")}
+    ${kpi(pct(growth, 0), "Индекс рынка с 2015", `в среднем ${pct(cg)} в год`)}
+    ${kpi(nf.format(c.objects_resold), "Экземпляров с перепродажами", `из ${nf.format(c.objects)} опознанных`)}
+    ${kpi(q.f1.toFixed(2).replace(".", ","), "Точность сопоставления, F1", "уровень экземпляра, на эталоне")}
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Индекс цен по сегментам, 2015 = 100</h2><p>Регрессия по повторным продажам и характеристикам лотов</p></div>
+    <div class="legend">${SEGMENTS.map((s, i) => `<span><i style="background:${SEG_COLOR[i]}"></i>${s}</span>`).join("")}<span><i style="background:var(--ink)"></i>Весь рынок</span></div>
+    <div class="chart" id="mk-chart"></div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Художники</h2><p>Нажмите на строку, чтобы открыть карточку. Столбцы сортируются.</p></div>
+    <div class="table-wrap" id="artists-table"></div>
+  </section>`;
+};
+AFTER.market = () => {
+  const toPts = idx => Object.keys(idx).map(Number).sort((a, b) => a - b).map(y => ({ x: y, y: idx[y].value, lo: idx[y].lo, hi: idx[y].hi, n: idx[y].n }));
+  const series = SEGMENTS.map((s, i) => ({ name: s, color: SEG_COLOR[i], pts: toPts(DATA.market[s]) }));
+  series.push({ name: "Весь рынок", color: "var(--ink)", pts: toPts(DATA.market.all), width: 2.5, band: true });
+  lineChart(document.getElementById("mk-chart"), { series, baseline: 100, yFmt: v => nf.format(Math.round(v)), tipTitle: x => `${x} год` });
+  renderArtistsTable();
+};
+function renderArtistsTable() {
+  const cols = [
+    ["name_ru", "Художник"], ["spark", "Индекс"], ["cagr_all", "Рост в год, 2015–26", "r"], ["cagr_3y", "Рост в год, 3 года", "r"],
+    ["liq", "Ликвидность", ""], ["st", "Доля проданных", "r"], ["above", "Выше эстимейта", "r"], ["turnover_12m", "Оборот, 12 мес.", "r"],
+  ];
+  const val = (a, k) => k === "liq" ? a.liquidity.score : k === "st" ? a.liquidity.sell_through : k === "above" ? a.bias.above : a[k];
+  const rows = ARTIST_IDS.map(id => ART[id]).sort((a, b) => {
+    const { key, dir } = state.sort; const va = val(a, key), vb = val(b, key);
+    return typeof va === "string" ? dir * va.localeCompare(vb) : dir * ((va ?? -1e9) - (vb ?? -1e9));
+  });
+  document.getElementById("artists-table").innerHTML = `<table><thead><tr>${cols.map(([k, t, c]) => k === "spark" ? `<th>${t}</th>` :
+    `<th class="sortable ${c || ""}" data-sort="${k}" ${state.sort.key === k ? `aria-sort="${state.sort.dir > 0 ? "ascending" : "descending"}"` : ""}>${t}${state.sort.key === k ? (state.sort.dir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}</tr></thead><tbody>${rows.map(a => `
+    <tr class="link" data-go="artist" data-arg="${a.id}">
+      <td><div class="cell-title"><span>${esc(a.name_ru)}</span><small>${esc(a.segment)} · ${esc(a.life)}</small></div></td>
+      <td>${sparkline(a.index)}</td>
+      <td class="r num ${a.cagr_all >= 0 ? "pos" : "neg"}">${pct(a.cagr_all)}</td>
+      <td class="r num ${a.cagr_3y >= 0 ? "pos" : "neg"}">${pct(a.cagr_3y)}</td>
+      <td class="num"><span class="meter"><i style="width:${a.liquidity.score}%"></i></span>${a.liquidity.score}</td>
+      <td class="r num">${share(a.liquidity.sell_through)}</td>
+      <td class="r num">${share(a.bias.above)}</td>
+      <td class="r num">${usd(a.turnover_12m, true)}</td>
+    </tr>`).join("")}</tbody></table>`;
+  document.querySelectorAll("#artists-table th[data-sort]").forEach(th => th.addEventListener("click", () => {
+    const k = th.dataset.sort; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : (k === "name_ru" ? 1 : -1) }; renderArtistsTable();
+  }));
+}
+
+/* ================= Художник ================= */
+PAGES.artist = () => {
+  const a = ART[state.artist], ly = lastYear(a.index), b = a.bias;
+  const lots = DATA.lots.filter(l => l.a === a.id && l.s !== "upcoming").sort((x, y) => y.d.localeCompare(x.d)).slice(0, 10);
+  return `
+  <div class="pick" role="group" aria-label="Художник">${ARTIST_IDS.map(id => `<button data-go="artist" data-arg="${id}" aria-pressed="${id === a.id}">${esc(ART[id].name_ru)}</button>`).join("")}</div>
+  <section class="page-head"><p class="eyebrow">${esc(a.segment)} · ${esc(a.life)}</p><h1>${esc(a.name_ru)} <span class="muted" style="font-weight:500;font-style:italic">${esc(a.name)}</span></h1></section>
+  <section class="kpis">
+    ${kpi(nf.format(Math.round(a.index[ly].value)), `Индекс ${ly}`, "2015 = 100")}
+    ${kpi(pct(a.cagr_all), "Рост в год с 2015", `за 3 года: ${pct(a.cagr_3y)}`)}
+    ${kpi(a.liquidity.score + "<span class='muted' style='font-size:16px'> / 100</span>", "Ликвидность", `${nf.format(a.liquidity.lots_per_year)} лота в год, ${a.liquidity.houses} домов`)}
+    ${kpi(share(a.liquidity.sell_through), "Доля проданных", "за последние 3 года")}
+    ${kpi(pct(a.repeat.median_cagr), "Доходность перепродаж", `медиана по ${a.repeat.n} парам продаж`)}
+  </section>
+  <div class="grid-2">
+    <section class="panel">
+      <div class="panel-head"><h2>Индекс цен, 2015 = 100</h2><p>Полоса — 90% интервал</p></div>
+      <div class="chart" id="ar-chart"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Цена молотка против эстимейта</h2></div>
+      <p class="muted" style="font-size:13px">${b.n} лотов. Средняя цена молотка — ${b.mean_ratio ? Math.round(b.mean_ratio * 100) + "%" : "—"} от середины эстимейта.</p>
+      <div class="bias" role="img" aria-label="Распределение результатов относительно эстимейта">
+        <div style="flex:${b.below};background:var(--below)"></div><div style="flex:${b.within};background:var(--within)"></div>
+        <div style="flex:${b.above};background:var(--above)"></div><div class="hatch" style="flex:${b.unsold}"></div></div>
+      <div class="bias-legend">
+        <div><span><i style="background:var(--below)"></i>Ниже нижней оценки</span><b>${share(b.below)}</b></div>
+        <div><span><i style="background:var(--within)"></i>В пределах</span><b>${share(b.within)}</b></div>
+        <div><span><i style="background:var(--above)"></i>Выше верхней оценки</span><b>${share(b.above)}</b></div>
+        <div><span><i class="hatch"></i>Не продан</span><b>${share(b.unsold)}</b></div>
+      </div>
+      <p class="muted" style="font-size:12.5px">Сравнение ведётся по цене молотка: эстимейт публикуется без премии покупателя.</p>
+    </section>
+  </div>
+  <section class="panel">
+    <div class="panel-head"><h2>Работы в базе</h2><p>Варианты одной работы (состояния доски, издания) учитываются отдельно</p></div>
+    <div class="cards">${a.variants.map(vid => { const v = VAR[vid], val = v.valuation; return `
+      <button class="card" data-go="work" data-arg="${VAR_IDS.indexOf(vid)}">
+        <h3>${esc(v.title)}</h3>
+        <div class="aliases">${v.variant ? `<span class="chip accent">${esc(stateLabel(v.variant))}</span>` : ""}${v.ref ? `<span class="chip">${esc(v.ref)}</span>` : ""}<span class="chip">${esc(MEDIUM[v.medium] || v.medium)}</span></div>
+        <div class="row"><span>Лотов / экземпляров</span><span class="num">${v.lots} / ${v.objects}</span></div>
+        <div class="row"><span>Справедливая цена</span><b class="num">${val.p50 ? usd(val.p50) : "—"}</b></div>
+      </button>`; }).join("")}</div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Последние лоты</h2></div>
+    ${lotsTable(lots, true)}
+  </section>`;
+};
+AFTER.artist = () => {
+  const a = ART[state.artist];
+  const pts = Object.keys(a.index).map(Number).sort((x, y) => x - y).map(y => ({ x: y, y: a.index[y].value, lo: a.index[y].lo, hi: a.index[y].hi, n: a.index[y].n }));
+  const mk = DATA.market.all;
+  lineChart(document.getElementById("ar-chart"), {
+    series: [{ name: "Весь рынок", color: "var(--muted)", pts: Object.keys(mk).map(Number).map(y => ({ x: y, y: mk[y].value })), dash: true, width: 1.5 },
+    { name: a.name_ru, color: "var(--s1)", pts, band: true }],
+    baseline: 100, yFmt: v => nf.format(Math.round(v)), tipTitle: x => `${x} год`,
+  });
+};
+function lotsTable(lots, withWork) {
+  return `<div class="table-wrap"><table><thead><tr><th>Дата</th><th>Дом</th>${withWork ? "<th>Работа</th>" : "<th>Название в каталоге</th>"}<th class="r">Эстимейт</th><th class="r">Цена с премией</th><th>Итог</th></tr></thead><tbody>${lots.map(l => {
+    const v = VAR[l.v];
+    return `<tr ${v ? `class="link" data-go="work" data-arg="${VAR_IDS.indexOf(l.v)}"` : ""}>
+      <td class="num" style="white-space:nowrap">${fdate(l.d)}</td><td style="white-space:nowrap">${esc(HOUSES[l.h].name)}</td>
+      <td><div class="cell-title">${withWork ? `<span>${esc(v ? varName(v) : l.t)}</span><small class="mono">${esc(l.t)}</small>` : `<span class="mono">${esc(l.t)}</span><small>${l.q ? "копия, не оригинал" : l.ed ? "экземпляр " + l.ed : ""}${l.inf ? "вариант определён по изображению" : ""}</small>`}</div></td>
+      <td class="r num" style="white-space:nowrap">${estText(l)}</td>
+      <td class="r num">${l.tu ? usd(l.tu) : "—"}</td>
+      <td><span class="chip ${l.s === "sold" ? "" : "down"}">${STATUS[l.s]}</span></td></tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+
+/* ================= Работа ================= */
+PAGES.work = () => {
+  const v = VAR[state.variant], a = ART[v.artist], val = v.valuation;
+  const lots = (LOTS_BY_VAR.get(state.variant) || []).slice().sort((x, y) => y.d.localeCompare(x.d));
+  const sources = {}; for (const l of lots) sources[l.t] = (sources[l.t] || new Set()).add(HOUSES[l.h].name);
+  const pairs = DATA.repeat_pairs.filter(p => LOTS.get(p.from).v === state.variant).sort((x, y) => y.years - x.years).slice(0, 6);
+  return `
+  <div class="controls">
+    <div class="field"><label for="w-artist">Художник</label><select id="w-artist">${ARTIST_IDS.map(id => `<option value="${id}" ${id === v.artist ? "selected" : ""}>${esc(ART[id].name_ru)}</option>`).join("")}</select></div>
+    <div class="field" style="flex:1;min-width:220px"><label for="w-var">Работа</label><select id="w-var">${a.variants.map(id => `<option value="${VAR_IDS.indexOf(id)}" ${id === state.variant ? "selected" : ""}>${esc(varName(VAR[id]))}</option>`).join("")}</select></div>
+  </div>
+  <section class="page-head"><p class="eyebrow">${esc(a.name_ru)} · ${esc(v.year)}</p><h1>${esc(v.title)}</h1>
+    <div class="aliases">${v.variant ? `<span class="chip accent">${esc(stateLabel(v.variant))}</span>` : ""}${v.ref ? `<span class="chip">${esc(v.ref)}</span>` : ""}</div></section>
+  <div class="grid-2">
+    <section class="panel">
+      <div class="panel-head"><h2>История продаж</h2><p>Логарифмическая шкала, цены в долларах с премией</p></div>
+      <div class="legend"><span><i class="dot" style="background:var(--accent)"></i>Продан</span><span><i class="dot" style="background:transparent;border:1.5px solid var(--muted)"></i>Не продан (нижняя оценка)</span><span><i style="background:var(--s2);height:8px;width:5px"></i>Предстоит, эстимейт</span><span><i class="dash" style="color:var(--accent)"></i>Путь экземпляра — при наведении на точку</span><span><i class="band" style="background:var(--accent)"></i>Справедливая цена сейчас</span></div>
+      <div class="chart" id="w-chart"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Справедливая цена</h2></div>
+      ${val.p50 ? `<div><div class="big-value">${usd(val.p50)}</div><p class="muted">диапазон ${usd(val.p10)}–${usd(val.p90)} по ${val.n} аналогам, с премией</p></div>` : `<p class="muted">Недостаточно продаж.</p>`}
+      <dl class="facts">
+        <div><dt>Техника</dt><dd>${esc(MEDIUM[v.medium] || v.medium)}</dd></div>
+        <div><dt>Размер листа</dt><dd class="num">${v.size ? `${String(v.size[0]).replace(".", ",")} × ${String(v.size[1]).replace(".", ",")} см` : "—"}</dd></div>
+        <div><dt>Тираж</dt><dd>${v.edition ? v.edition + " экз." : "не нумерован"}</dd></div>
+        <div><dt>Лотов / экземпляров</dt><dd class="num">${v.lots} / ${v.objects}</dd></div>
+      </dl>
+      <button class="btn ghost" data-go="value" style="justify-self:start">Оценить свой экземпляр</button>
+    </section>
+  </div>
+  <section class="panel">
+    <div class="panel-head"><h2>Как эту работу называют источники</h2><p>Все написания сведены к одной карточке</p></div>
+    <div class="aliases">${Object.entries(sources).map(([t, hs]) => `<span class="alias" title="${esc([...hs].join(", "))}">${esc(t)}</span>`).join("")}</div>
+  </section>
+  ${pairs.length ? `<section class="panel"><div class="panel-head"><h2>Повторные продажи одного экземпляра</h2><p>Основа для расчёта доходности</p></div>
+    <div class="table-wrap"><table><thead><tr><th>Экземпляр</th><th>Первая продажа</th><th>Повторная</th><th class="r">Лет</th><th class="r">Доходность в год</th></tr></thead><tbody>${pairs.map(p => {
+    const f = LOTS.get(p.from), t = LOTS.get(p.to);
+    return `<tr><td>${f.ed ? "№ " + f.ed : "оттиск"}</td><td class="num">${usd(p.p0)} · ${esc(HOUSES[f.h].name)}, ${f.d.slice(0, 4)}</td><td class="num">${usd(p.p1)} · ${esc(HOUSES[t.h].name)}, ${t.d.slice(0, 4)}</td><td class="r num">${String(p.years).replace(".", ",")}</td><td class="r num ${p.cagr >= 0 ? "pos" : "neg"}">${pct(p.cagr)}</td></tr>`;
+  }).join("")}</tbody></table></div></section>` : ""}
+  <section class="panel"><div class="panel-head"><h2>Лоты</h2><p>${state.allLots ? lots.length : Math.min(12, lots.length)} из ${lots.length}</p></div>${lotsTable(state.allLots ? lots : lots.slice(0, 12), false)}
+    ${lots.length > 12 ? `<button class="btn ghost" id="w-more" style="justify-self:start">${state.allLots ? "Свернуть" : "Показать все " + lots.length}</button>` : ""}</section>`;
+};
+AFTER.work = () => {
+  document.getElementById("w-artist").addEventListener("change", e => go("work", VAR_IDS.indexOf(ART[e.target.value].variants[0])));
+  document.getElementById("w-var").addEventListener("change", e => go("work", e.target.value));
+  document.getElementById("w-more")?.addEventListener("click", () => { state.allLots = !state.allLots; render(); });
+  timelineChart(document.getElementById("w-chart"), LOTS_BY_VAR.get(state.variant) || [], VAR[state.variant].valuation.p50 ? VAR[state.variant].valuation : null);
+};
+
+/* ================= Оценка ================= */
+const QUALITY = [[0.8, "ниже среднего: пятна, обрезанные поля"], [1, "типичная сохранность"], [1.2, "отличная: ранний оттиск, широкие поля"]];
+PAGES.value = () => {
+  const vid = state.valueVariant || DATA.alerts.collection[0]?.variant || state.variant;
+  state.valueVariant = vid;
+  const v = VAR[vid], a = ART[v.artist], val = v.valuation, k = state.valueQuality;
+  const comps = (val.comps || []).map(id => LOTS.get(id));
+  const now = idxVal(a.index, lastYear(a.index));
+  return `
+  <section class="page-head"><p class="eyebrow">Оценка стоимости</p><h1>Сколько стоит работа сейчас</h1>
+    <p>Цены прошлых продаж того же варианта приводятся к сегодняшнему уровню рынка по индексу художника. Диапазон — 10-й и 90-й процентили приведённых цен.</p></section>
+  <section class="panel">
+    <div class="controls">
+      <div class="field"><label for="v-artist">Художник</label><select id="v-artist">${ARTIST_IDS.map(id => `<option value="${id}" ${id === v.artist ? "selected" : ""}>${esc(ART[id].name_ru)}</option>`).join("")}</select></div>
+      <div class="field" style="flex:1;min-width:220px"><label for="v-var">Работа и вариант</label><select id="v-var">${a.variants.map(id => `<option value="${id}" ${id === vid ? "selected" : ""}>${esc(varName(VAR[id]))}</option>`).join("")}</select></div>
+      <div class="field" style="flex:1;min-width:220px"><label for="v-q">Сохранность</label><select id="v-q">${QUALITY.map(([q, t]) => `<option value="${q}" ${q === k ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+    </div>
+  </section>
+  ${val.p50 ? `<div class="grid-2">
+    <section class="panel">
+      <p class="eyebrow">Справедливая стоимость, с премией покупателя</p>
+      <div class="big-value">${usd(val.p50 * k)}</div>
+      <p class="muted">Диапазон ${usd(val.p10 * k)}–${usd(val.p90 * k)} · ${val.n} аналогов${k !== 1 ? ` · поправка на сохранность ${pct(k - 1, 0)}` : ""}</p>
+      <div class="range" id="v-range"></div>
+    </section>
+    <section class="panel">
+      <h2>Что учтено</h2>
+      <ul class="list">
+        <li>Только продажи <strong>того же варианта</strong>: ${esc(stateLabel(v.variant) || "единый тираж")}.</li>
+        <li>Индекс ${esc(a.name_ru)}: ${nf.format(Math.round(now))} пунктов сейчас против 100 в 2015 году.</li>
+        <li>Цены разных домов приведены к одному виду: в долларах и с премией покупателя.</li>
+        <li>Копии и работы «после» художника исключены.</li>
+      </ul>
+    </section>
+  </div>
+  <section class="panel"><div class="panel-head"><h2>Аналоги</h2><p>Последние ${comps.length} продаж</p></div>
+    <div class="table-wrap"><table><thead><tr><th>Дата</th><th>Дом</th><th class="r">Цена тогда</th><th class="r">Поправка рынка</th><th class="r">Цена сегодня</th></tr></thead><tbody>${comps.map(l => {
+    const f = now / idxVal(a.index, +l.d.slice(0, 4));
+    return `<tr class="link" data-go="work" data-arg="${VAR_IDS.indexOf(l.v)}"><td class="num">${fdate(l.d)}</td><td>${esc(HOUSES[l.h].name)}</td><td class="r num">${usd(l.tu)}</td><td class="r num">×${f.toFixed(2).replace(".", ",")}</td><td class="r num">${usd(l.tu * f)}</td></tr>`;
+  }).join("")}</tbody></table></div></section>` : `<section class="panel"><p class="empty">По этому варианту пока нет продаж для оценки.</p></section>`}`;
+};
+AFTER.value = () => {
+  document.getElementById("v-artist").addEventListener("change", e => { state.valueVariant = ART[e.target.value].variants[0]; render(); });
+  document.getElementById("v-var").addEventListener("change", e => { state.valueVariant = e.target.value; render(); });
+  document.getElementById("v-q").addEventListener("change", e => { state.valueQuality = +e.target.value; render(); });
+  const v = VAR[state.valueVariant], val = v.valuation, box = document.getElementById("v-range"); if (!box) return;
+  const a = ART[v.artist], now = idxVal(a.index, lastYear(a.index)), k = state.valueQuality;
+  const adj = (val.comps || []).map(id => { const l = LOTS.get(id); return l.tu * now / idxVal(a.index, +l.d.slice(0, 4)) * k; });
+  const lo = Math.min(...adj, val.p10 * k) * 0.92, hi = Math.max(...adj, val.p90 * k) * 1.05;
+  const P = x => ((x - lo) / (hi - lo) * 100).toFixed(2) + "%";
+  box.innerHTML = `<div class="track"></div><div class="band" style="left:${P(val.p10 * k)};width:calc(${P(val.p90 * k)} - ${P(val.p10 * k)})"></div>` +
+    adj.map(x => `<div class="tick" style="left:${P(x)}"></div>`).join("") + `<div class="p50" style="left:${P(val.p50 * k)}"></div>` +
+    `<div class="lab top" style="left:${P(val.p50 * k)}">медиана</div><div class="lab" style="left:${P(val.p10 * k)}">${usd(val.p10 * k, true)}</div><div class="lab" style="left:${P(val.p90 * k)}">${usd(val.p90 * k, true)}</div>`;
+};
+
+/* ================= Уведомления ================= */
+const OWN = DATA.alerts.collection[0];
+function reasonFor(n) {
+  const own = OWN && VAR[OWN.variant];
+  if (own && (n.variant === OWN.variant || (n.artist === own.artist && n.similarity > 0.6))) return "similar";
+  if (state.watchWorks.includes(n.variant)) return "work";
+  if (state.watchArtists.includes(n.artist)) return "artist";
+  return null;
+}
+PAGES.alerts = () => {
+  const own = OWN && VAR[OWN.variant];
+  const feed = DATA.alerts.notifications.map(n => ({ ...n, why: reasonFor(n) })).filter(n => n.why);
+  const head = n => n.why === "similar" ? `Работа ${esc(ART[n.artist].name_ru)}, похожая на вашу, выставлена на торги` :
+    n.why === "work" ? "Работа из избранного выставлена на торги" : `Новый лот: ${esc(ART[n.artist].name_ru)}`;
+  return `
+  <section class="page-head"><p class="eyebrow">Личный кабинет · пример пользователя</p><h1>Избранное и уведомления</h1>
+    <p>Каждый новый лот сверяется с коллекцией и избранным. Похожие работы находятся по изображению. Отметьте художников, и лента справа обновится.</p></section>
+  <div class="grid-2e">
+    <div style="display:grid;gap:18px;align-content:start;min-width:0">
+      <section class="panel">
+        <div class="panel-head"><h2>Моя коллекция</h2><span class="chip">пример</span></div>
+        ${own ? `<div class="own"><h3>${esc(own.title)}</h3><span class="muted">${esc(ART[own.artist].name_ru)} · ${esc(OWN.note)}${own.variant ? " · " + esc(stateLabel(own.variant)) : ""}</span>
+          <span>Справедливая цена: <b class="num">${usd(own.valuation.p50)}</b> <span class="muted num">(${usd(own.valuation.p10)}–${usd(own.valuation.p90)})</span></span></div>` : ""}
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Художники в избранном</h2></div>
+        <div class="toggle-list" id="watch-artists">${ARTIST_IDS.map(id => `<button data-a="${id}" aria-pressed="${state.watchArtists.includes(id)}">${esc(ART[id].name_ru)}</button>`).join("")}</div>
+        <div class="panel-head" style="margin-top:6px"><h3>Работы в избранном</h3></div>
+        <div>${state.watchWorks.map(v => `<div class="watch-item"><span>${esc(varName(VAR[v]))} <span class="muted">· ${esc(ART[VAR[v].artist].name_ru)}</span></span><button data-rm="${esc(v)}" aria-label="Убрать из избранного">Убрать</button></div>`).join("") || `<p class="muted" style="font-size:13px">Пока нет работ.</p>`}</div>
+        <div class="controls"><div class="field" style="flex:1"><label for="add-work">Добавить работу</label><select id="add-work"><option value="">Выберите работу…</option>${VAR_IDS.filter(v => !state.watchWorks.includes(v)).map(v => `<option value="${esc(v)}">${esc(ART[VAR[v].artist].name_ru)} — ${esc(varName(VAR[v]))}</option>`).join("")}</select></div></div>
+      </section>
+    </div>
+    <section class="phone" aria-label="Лента уведомлений в Telegram">
+      <div class="bot"><div class="av">L</div><div><b>Lotline Bot</b><small>Telegram · ${feed.length} уведомлений о ближайших торгах</small></div></div>
+      ${feed.map(n => `<article class="msg"><span class="h">${head(n)}</span><span>${esc(n.body)}</span><span class="muted">${esc(n.fair)}</span>
+        <div class="meta">${sigChip(n.signal)}<time>${fdate(n.date)}</time></div></article>`).join("") || `<p class="empty">Под ваши фильтры ближайших лотов нет. Добавьте художника в избранное.</p>`}
+    </section>
+  </div>
+  <section class="panel"><div class="panel-head"><h2>Все предстоящие лоты</h2><p>Эстимейт с премией сравнивается со справедливой ценой</p></div>
+    <div class="table-wrap"><table><thead><tr><th>Дата</th><th>Дом</th><th>Работа</th><th class="r">Эстимейт</th><th>Сигнал</th></tr></thead><tbody>${DATA.upcoming.map(u => {
+    const l = LOTS.get(u.lot), v = VAR[l.v];
+    return `<tr ${v ? `class="link" data-go="work" data-arg="${VAR_IDS.indexOf(l.v)}"` : ""}><td class="num" style="white-space:nowrap">${fdate(l.d)}</td><td style="white-space:nowrap">${esc(HOUSES[l.h].name)}</td>
+      <td><div class="cell-title"><span>${esc(v ? varName(v) : l.t)}</span><small>${esc(ART[l.a].name_ru)}</small></div></td>
+      <td class="r num" style="white-space:nowrap">${estText(l)}</td><td>${sigChip(u.signal)}</td></tr>`;
+  }).join("")}</tbody></table></div></section>`;
+};
+AFTER.alerts = () => {
+  document.querySelectorAll("#watch-artists button").forEach(b => b.addEventListener("click", () => {
+    const id = b.dataset.a; state.watchArtists = state.watchArtists.includes(id) ? state.watchArtists.filter(x => x !== id) : [...state.watchArtists, id];
+    store.set("watchArtists", state.watchArtists); render();
+  }));
+  document.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", () => {
+    state.watchWorks = state.watchWorks.filter(v => v !== b.dataset.rm); store.set("watchWorks", state.watchWorks); render();
+  }));
+  document.getElementById("add-work").addEventListener("change", e => {
+    if (!e.target.value) return; state.watchWorks = [...state.watchWorks, e.target.value]; store.set("watchWorks", state.watchWorks); render();
+  });
+};
+
+/* ================= Как это работает ================= */
+function showcaseObject() {
+  let best = null, bestScore = 0;
+  const byObj = new Map(); for (const l of DATA.lots) if (!l.q && l.s === "sold") { if (!byObj.has(l.o)) byObj.set(l.o, []); byObj.get(l.o).push(l); }
+  for (const [o, ls] of byObj) {
+    const houses = new Set(ls.map(l => l.h)), langs = new Set(ls.map(l => HOUSES[l.h].lang));
+    const score = houses.size * 10 + langs.size * 5 + (ls.some(l => l.inf) ? 3 : 0) + (VAR[ls[0].v].ref ? 2 : 0) - (ls[0].ed ? 4 : 0);
+    if (score > bestScore) { bestScore = score; best = ls; }
+  }
+  return best.sort((a, b) => a.d.localeCompare(b.d));
+}
+PAGES.pipeline = () => {
+  const p = DATA.pipeline, c = DATA.meta.counts, q = p.quality, obj = showcaseObject(), v = VAR[obj[0].v];
+  const reduction = 1 - p.pairs_compared / p.pairs_naive;
+  const rv = p.review.slice(0, 3);
+  return `
+  <section class="page-head"><p class="eyebrow">Конвейер данных</p><h1>Как из разрозненных каталогов получается история цен</h1>
+    <p>Каждый шаг ниже выполнен кодом конвейера на этих данных. Цифры не нарисованы, а посчитаны при сборке страницы за ${String(DATA.meta.built_seconds).replace(".", ",")} с.</p></section>
+  <div class="steps">
+    <section class="step"><div class="panel">
+      <div class="panel-head"><h2>Сбор: каталоги в форматах домов</h2><p>${nf.format(c.raw)} записей из ${c.sources} источников</p></div>
+      <p>Один и тот же оттиск — <strong>${esc(v.title)}</strong>${v.variant ? `, ${esc(stateLabel(v.variant))}` : ""} — в каталогах разных домов. Язык, единицы, валюта и формат цены везде свои.</p>
+      <div class="grid-2e">${obj.slice(0, 4).map(l => `<div class="raw"><span class="src">${esc(HOUSES[l.h].name)} · ${fdate(l.d)}</span><b>${esc(l.ar)}</b><span>${esc(l.t)}</span><span>${esc(l.m || "")}</span><span>${esc(l.dim || "размеры не указаны")}</span><span>${esc(l.er)}</span><span>${esc(l.pr || "")}</span></div>`).join("")}</div>
+    </div></section>
+    <section class="step"><div class="panel">
+      <div class="panel-head"><h2>Нормализация: единые поля</h2><p>Доля лотов, где поле извлечено</p></div>
+      <div class="bars">${Object.entries(p.coverage).map(([k, x]) => `<div class="bar-row"><span>${k}</span><span class="b"><i style="width:${x * 100}%"></i></span><span class="num r" style="text-align:right">${Math.round(x * 100)}%</span></div>`).join("")}</div>
+      <p class="muted" style="font-size:13px">Номер в каталоге, состояние и номер в тираже есть не у всех работ, поэтому их доля ниже. Где состояние не указано, его определяет следующий шаг.</p>
+      <div class="table-wrap"><table><thead><tr><th>Источник</th><th>Состояние</th><th>Каталог</th><th class="r">Размер, см</th><th class="r">Эстимейт, $</th><th class="r">Цена с премией, $</th></tr></thead><tbody>${obj.slice(0, 4).map(l => `<tr><td>${esc(HOUSES[l.h].name)}</td><td>${l.st ? esc(stateLabel(l.st)) : l.inf ? "<span class='chip accent'>по изображению</span>" : "—"}</td><td>${esc(l.ref || "—")}</td><td class="r num">${l.hc ? `${String(l.hc).replace(".", ",")} × ${String(l.wc).replace(".", ",")}` : "—"}</td><td class="r num">${nf.format(l.elu)}${l.ehu !== l.elu ? "–" + nf.format(l.ehu) : ""}</td><td class="r num">${nf.format(l.tu)}</td></tr>`).join("")}</tbody></table></div>
+    </div></section>
+    <section class="step"><div class="panel">
+      <div class="panel-head"><h2>Сопоставление: работа → вариант → экземпляр</h2><p>Текст, размеры, номер в каталоге и сходство изображений</p></div>
+      <div class="flow">
+        <div><b>${nf.format(p.pairs_compared)}</b><span>пар сравнено вместо ${nf.format(p.pairs_naive)} (−${Math.round(reduction * 100)}% за счёт блокировки)</span></div>
+        <div><b>${c.works}</b><span>работ</span></div><div><b>${c.variants}</b><span>вариантов: состояния, издания, тиражи</span></div>
+        <div><b>${nf.format(c.objects)}</b><span>физических экземпляров</span></div><div><b>${p.variant_inferred}</b><span>лотов: состояние определено по изображению</span></div>
+        <div><b>${c.after}</b><span>копий «после» художника отсеяно</span></div>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Уровень</th><th class="r">Точность</th><th class="r">Полнота</th><th class="r">F1</th><th class="r">Пар в эталоне</th></tr></thead><tbody>${[["work", "Работа"], ["variant", "Вариант"], ["object", "Экземпляр"]].map(([k, t]) => `<tr><td>${t}</td><td class="r num">${(q[k].precision * 100).toFixed(1).replace(".", ",")}%</td><td class="r num">${(q[k].recall * 100).toFixed(1).replace(".", ",")}%</td><td class="r num">${q[k].f1.toFixed(3).replace(".", ",")}</td><td class="r num">${nf.format(q[k].pairs_true)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="muted" style="font-size:13px">Метрики считаются по эталонной разметке, которая есть у синтетических данных. На реальных каталогах качество будет ниже, для его измерения нужна ручная разметка нескольких тысяч пар.</p>
+      <h3>Очередь ручной проверки: ${p.review_queue} пар</h3>
+      <p class="muted" style="font-size:13px">Пары, где система не уверена, получает эксперт. Его решения становятся обучающими данными.</p>
+      <div class="grid-2e">${rv.map(r => { const A = LOTS.get(r.a), B = LOTS.get(r.b); return `<div class="raw"><span class="src">${r.level === "object" ? "тот же экземпляр?" : "та же работа?"} · уверенность ${Math.round(r.prob * 100)}%</span><b>${esc(HOUSES[A.h].name)}, ${A.d.slice(0, 4)}:</b><span>${esc(A.t)} · ${esc(A.dim || "размеры не указаны")}</span><b>${esc(HOUSES[B.h].name)}, ${B.d.slice(0, 4)}:</b><span>${esc(B.t)} · ${esc(B.dim || "размеры не указаны")}</span><span>сходство изображений ${r.features.image.toFixed(3)}</span></div>`; }).join("")}</div>
+    </div></section>
+    <section class="step"><div class="panel">
+      <div class="panel-head"><h2>Аналитика: проверка метода</h2><p>Индекс, восстановленный по лотам, против заложенного в генератор</p></div>
+      <div class="pick" role="group" aria-label="Художник для проверки">${ARTIST_IDS.map(id => `<button data-pa="${id}" aria-pressed="${id === state.pipeArtist}">${esc(ART[id].name_ru)}</button>`).join("")}</div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>Восстановлен конвейером</span><span><i class="band" style="background:var(--s1)"></i>90% интервал</span><span style="color:var(--s2)"><i class="dash"></i><span style="color:var(--ink-2)">Заложен в данные</span></span></div>
+      <div class="chart" id="p-chart"></div>
+    </div></section>
+    <section class="step"><div class="panel">
+      <div class="panel-head"><h2>Уведомления</h2><p>${DATA.upcoming.length} предстоящих лотов сверены с избранным</p></div>
+      <p>Для каждого нового лота считается справедливая цена и сравнивается с эстимейтом. Лоты, похожие на работы из коллекции пользователя, находятся по изображению.</p>
+      <button class="btn" data-go="alerts" style="justify-self:start">Открыть ленту уведомлений</button>
+    </div></section>
+  </div>
+  <section class="panel">
+    <h2>Что смоделировано в демо и что нужно для продукта</h2>
+    <ul class="list">
+      <li><strong>Данные.</strong> В демо лоты создаёт генератор. В продукте — парсеры площадок, лицензированные базы и партнёрства с домами.</li>
+      <li><strong>Изображения.</strong> В демо сходство фото смоделировано векторами. В продукте — эмбеддинги CLIP или DINOv2 настоящих фотографий лотов.</li>
+      <li><strong>Веса сопоставления.</strong> В демо заданы вручную. В продукте обучаются на парах, размеченных экспертом.</li>
+      <li><strong>Готово как есть:</strong> нормализация форматов, блокировка, кластеризация, индексы с интервалами, оценка по аналогам, правила уведомлений.</li>
+    </ul>
+  </section>`;
+};
+AFTER.pipeline = () => {
+  document.querySelectorAll("[data-pa]").forEach(b => b.addEventListener("click", () => {
+    state.pipeArtist = b.dataset.pa;
+    document.querySelectorAll("[data-pa]").forEach(x => x.setAttribute("aria-pressed", x.dataset.pa === state.pipeArtist));
+    drawPipe();
+  }));
+  drawPipe();
+};
+function drawPipe() {
+  const a = ART[state.pipeArtist];
+  const pts = Object.keys(a.index).map(Number).sort((x, y) => x - y).map(y => ({ x: y, y: a.index[y].value, lo: a.index[y].lo, hi: a.index[y].hi, n: a.index[y].n }));
+  const truth = Object.keys(a.true_index).map(Number).sort((x, y) => x - y).map(y => ({ x: y, y: a.true_index[y] }));
+  lineChart(document.getElementById("p-chart"), {
+    series: [{ name: "Заложен", color: "var(--s2)", pts: truth, dash: true, label: "заложен" }, { name: "Восстановлен", color: "var(--s1)", pts, band: true, label: "восстановлен" }],
+    baseline: 100, height: 260, yFmt: v => nf.format(Math.round(v)), tipTitle: x => `${a.name_ru}, ${x}`,
+  });
+}
+
+render();
+</script>
