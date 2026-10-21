@@ -1,30 +1,14 @@
 """Сквозные сценарии: организатор создаёт закупку, участники заказывают, коробки, оплаты, факт, лимиты."""
 from __future__ import annotations
 
-import os
-import tempfile
+import pytest
+from fastapi.testclient import TestClient
 
-os.environ["DOLKA_DB"] = os.path.join(tempfile.mkdtemp(), "test.sqlite3")
-os.environ["DOLKA_SECRET"] = "test"
-os.environ["DOLKA_PAYMENTS"] = "demo"
+from app import db
+from app import purchases as pu
+from app.main import app
 
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app import db  # noqa: E402
-from app import purchases as pu  # noqa: E402
-from app.main import app  # noqa: E402
-
-H = {"X-Requested-With": "dolka"}
-
-
-@pytest.fixture()
-def client():
-    with TestClient(app) as c:
-        with db.tx() as conn:
-            for t in ("order_lines", "orders", "items", "purchases", "subscriptions", "payments", "sessions", "users"):
-                conn.execute(f"DELETE FROM {t}")
-        yield c
+from .conftest import H
 
 
 def organizer(client, email="org@example.com"):

@@ -27,3 +27,8 @@ PUBLIC_URL = _env("DOLKA_PUBLIC_URL", "http://localhost:8000").rstrip("/")
 YOOKASSA_SHOP_ID = _env("YOOKASSA_SHOP_ID")
 YOOKASSA_SECRET_KEY = _env("YOOKASSA_SECRET_KEY")
 SESSION_DAYS = 60
+
+# Telegram-бот и мини-приложение (см. README, раздел «Telegram»). Без токена мини-приложение выключено.
+TG_BOT_TOKEN = _env("TG_BOT_TOKEN")
+TG_BOT_USERNAME = _env("TG_BOT_USERNAME").lstrip("@")
+TG_WEBHOOK_SECRET = _env("TG_WEBHOOK_SECRET")

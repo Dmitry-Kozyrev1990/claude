@@ -1,19 +1,21 @@
-// Страница закупки для участника: без регистрации, заказ привязан к личной ссылке (токену).
-(function () {
-  const slug = location.pathname.split("/").filter(Boolean).pop();
+// Страница закупки для участника: без регистрации. В браузере заказ привязан к личной ссылке (токену),
+// в мини-приложении Telegram — к аккаунту участника (сервер проверяет initData), кнопка «Оформить» — штатная.
+window.DolkaJoin = { start(slugArg) { join(slugArg); } };
+
+function join(slug) {
   const key = "dolka:" + slug;
   const params = new URLSearchParams(location.search);
-  if (params.get("t")) {
+  if (!D.tg && params.get("t")) {
     D.store.set(key, params.get("t"));
     history.replaceState(null, "", location.pathname);
   }
-  let token = D.store.get(key);
+  let token = D.tg ? null : D.store.get(key);
   let P = null;          // данные закупки
   let qty = {};          // item_id → тысячные доли
   let editing = false;   // участник меняет уже оформленный заказ
   let error = "";
   const root = document.getElementById("root");
-  const bar = document.getElementById("bar");
+  const bar = document.getElementById("bar") || document.createElement("div");
 
   const hdr = () => (token ? { "X-Order-Token": token } : {});
   const myLink = () => `${location.origin}/z/${slug}?t=${encodeURIComponent(token)}`;
@@ -97,7 +99,7 @@
       <div class="list">${P.items.map(i => itemRow(i, canEdit)).join("") || `<p class="muted">Организатор ещё не добавил позиции.</p>`}</div></div>`;
 
     if (canEdit && P.items.length) {
-      const name = mine ? mine.name : (D.store.get("dolka:name") || "");
+      const name = mine ? mine.name : (D.store.get("dolka:name") || D.tgUserName());
       const phone = mine ? mine.phone : (D.store.get("dolka:phone") || "");
       html += `<form class="card" id="form">
         <h2>Ваши данные</h2>
@@ -108,12 +110,14 @@
         <label>Комментарий организатору<input name="comment" maxlength="500" value="${D.esc(mine ? mine.comment : "")}"></label>
         <div id="sum" class="small muted"></div>
         <div class="row" style="margin-top:8px">
-          <button class="primary" type="submit">${mine ? "Сохранить изменения" : "Оформить заказ"}</button>
+          <button class="primary${D.tg ? " hidden" : ""}" type="submit">${mine ? "Сохранить изменения" : "Оформить заказ"}</button>
           ${mine ? `<button type="button" id="cancelEdit">Не менять</button>` : ""}
         </div>
       </form>`;
     }
     if (P.pickup) html += `<div class="card"><h3>Где и когда забрать</h3><div style="white-space:pre-wrap">${D.esc(P.pickup)}</div></div>`;
+    html += `<div class="row" style="margin-bottom:12px"><button id="shareJoin">Позвать соседей</button>
+      ${D.tg ? `<button class="ghost" id="becomeOrg">Собрать свою закупку</button>` : ""}</div>`;
     html += `<p class="small muted">Деньги переводятся организатору напрямую. Сервис «Долька» помогает вести учёт и не принимает платежи участников.</p>`;
     root.innerHTML = html;
     bind(canEdit);
@@ -147,8 +151,9 @@
         ${balance > 0 && o.says_paid ? `<button id="unpaid">Ещё не оплатил(а)</button>` : ""}
         ${P.accepting ? `<button id="edit">Изменить заказ</button><button class="danger ghost" id="cancel">Отменить</button>` : ""}
       </div>
-      <div class="small muted" style="margin-top:12px">Ваша личная ссылка на заказ — сохраните её, чтобы открыть заказ с другого устройства:</div>
-      <div class="row" style="margin-top:4px"><input readonly value="${D.esc(myLink())}" class="grow" style="flex:1"><button id="copyLink">Копировать</button></div>
+      ${D.tg ? `<div class="small muted" style="margin-top:12px">Заказ привязан к вашему Telegram: откройте закупку по той же ссылке с любого устройства. Бот пришлёт, когда сбор закроется и когда всё приедет.</div>`
+        : `<div class="small muted" style="margin-top:12px">Ваша личная ссылка на заказ — сохраните её, чтобы открыть заказ с другого устройства:</div>
+      <div class="row" style="margin-top:4px"><input readonly value="${D.esc(myLink())}" class="grow" style="flex:1"><button id="copyLink">Копировать</button></div>`}
     </div>`;
   }
 
@@ -169,9 +174,11 @@
     on("cancelEdit", () => { editing = false; error = ""; load(); });
     on("copyLink", () => D.copy(myLink()));
     on("paid", () => setPaid(true));
+    on("shareJoin", () => D.share(P.tg_link || location.href, `🛒 Совместная закупка: ${P.title}`));
+    on("becomeOrg", () => { D.mainButton(null); location.hash = ""; window.DolkaApp.start(); });
     on("unpaid", () => setPaid(false));
     on("cancel", async () => {
-      if (!confirm("Отменить заказ целиком?")) return;
+      if (!await D.confirm("Отменить заказ целиком?")) return;
       try { await D.api("DELETE", `/api/z/${slug}/order`, undefined, hdr()); }
       catch (e) { D.toast(e.message); return; }
       D.store.del(key); token = null; editing = false; load();
@@ -187,8 +194,20 @@
   }
 
   function updateSum(canEdit) {
-    if (!canEdit) { bar.classList.add("hidden"); return; }
-    const t = totals();
+    const t = canEdit ? totals() : null;
+    if (D.tg) {
+      // В Telegram вместо своей нижней панели — главная кнопка клиента
+      D.mainButton(t && t.goods ? `${P.my_order ? "Сохранить" : "Оформить"} · ${D.rub(t.total)}` : null, () => {
+        const f = document.getElementById("form");
+        if (f) f.requestSubmit();
+      });
+    }
+    if (!canEdit || D.tg) {
+      bar.classList.add("hidden");
+      const sum = document.getElementById("sum");
+      if (sum && t) sum.textContent = t.goods ? `Товары ${D.rub(t.goods)}${t.fee ? ` + оргсбор ${D.rub(t.fee)}` : ""} = ${D.rub(t.total)}` : "";
+      return;
+    }
     const sum = document.getElementById("sum");
     if (sum) sum.textContent = t.goods ? `Товары ${D.rub(t.goods)}${t.fee ? ` + оргсбор ${D.rub(t.fee)}` : ""} = ${D.rub(t.total)}` : "";
     bar.classList.toggle("hidden", !t.goods);
@@ -211,13 +230,18 @@
     f.querySelector("button[type=submit]").disabled = true;
     try {
       const res = await D.api("POST", `/api/z/${slug}/order`, body, hdr());
-      token = res.token; D.store.set(key, token);
+      if (!D.tg) { token = res.token; D.store.set(key, token); }
+      D.haptic("success");
+      // Боту нужно разрешение писать участнику, иначе уведомления о стопе и раздаче не дойдут
+      const u = D.tg && D.tg.initDataUnsafe.user;
+      if (u && !u.allows_write_to_pm && D.tg.requestWriteAccess) { try { D.tg.requestWriteAccess(); } catch (e) { /* старый клиент */ } }
       D.store.set("dolka:name", body.name); D.store.set("dolka:phone", body.phone);
       editing = false; error = "";
       D.toast("Заказ сохранён");
       await load();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
+      D.haptic("error");
       error = e.message; render();
     }
   }
@@ -230,4 +254,6 @@
   }
 
   load();
-})();
+}
+
+if (!window.DOLKA_TG) join(location.pathname.split("/").filter(Boolean).pop());

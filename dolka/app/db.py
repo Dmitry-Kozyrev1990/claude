@@ -73,9 +73,22 @@ def conn() -> sqlite3.Connection:
     return c
 
 
+# Колонки, добавленные после первой версии схемы: (таблица, колонка, определение).
+MIGRATIONS = [
+    ("users", "tg_id", "INTEGER"),    # организатор вошёл через Telegram
+    ("orders", "tg_id", "INTEGER"),   # участник заказал из мини-приложения — ему пишет бот
+]
+
+
 def init():
-    conn().executescript(SCHEMA)
-    conn().commit()
+    c = conn()
+    c.executescript(SCHEMA)
+    for table, column, ddl in MIGRATIONS:
+        if column not in {r["name"] for r in c.execute(f"PRAGMA table_info({table})")}:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_tg ON users(tg_id) WHERE tg_id IS NOT NULL")
+    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS orders_tg ON orders(purchase_id, tg_id) WHERE tg_id IS NOT NULL")
+    c.commit()
 
 
 @contextmanager

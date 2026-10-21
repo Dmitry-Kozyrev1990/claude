@@ -2,7 +2,9 @@
 
 Платёжный провайдер подключается через интерфейс Provider:
 - DemoProvider — тестовая активация без списания денег;
-- YooKassaProvider — место для ЮKassa (создание платежа и webhook payment.succeeded).
+- YooKassaProvider — место для ЮKassa (создание платежа и webhook payment.succeeded);
+- StarsProvider — Telegram Stars внутри мини-приложения (по правилам Telegram цифровые товары
+  в мини-приложениях продаются только за звёзды); подписка включается по successful_payment в app/tg.py.
 Деньги участников закупок через сервис не проходят: они платят организатору напрямую.
 """
 from __future__ import annotations
@@ -21,6 +23,14 @@ class BillingError(Exception):
 def active_subscription(user_id: int):
     return db.one("SELECT * FROM subscriptions WHERE user_id = ? AND starts_at <= ? AND ends_at > ? "
                   "ORDER BY ends_at DESC LIMIT 1", user_id, db.now(), db.now())
+
+
+def paid_until(user_id: int) -> tuple[str | None, bool]:
+    """До какой даты действует «Про» с учётом оплаченных наперёд периодов и идёт ли сейчас только пробный."""
+    rows = db.all_("SELECT source, ends_at FROM subscriptions WHERE user_id = ? AND ends_at > ?", user_id, db.now())
+    if not rows:
+        return None, False
+    return max(r["ends_at"] for r in rows), all(r["source"] == "trial" for r in rows)
 
 
 def current_plan(user) -> str:
@@ -94,15 +104,35 @@ class YooKassaProvider(Provider):
         raise BillingError("Оплата картой через ЮKassa подключается. Пока доступна тестовая активация.")
 
 
-def provider() -> Provider | None:
+class StarsProvider(Provider):
+    name = "stars"
+
+    def __init__(self, stars: int):
+        self.stars = stars
+
+    def start(self, payment_id, amount_rub, description):
+        from . import tg
+        try:
+            return {"invoice_url": tg.create_stars_invoice(payment_id, "Долька Про", description, self.stars)}
+        except tg.TgError as e:
+            raise BillingError(f"Не удалось выставить счёт в Telegram: {e}")
+
+
+def provider(channel: str = "web", d: dict | None = None) -> Provider | None:
+    if channel == "tg":
+        from . import tg
+        # В тестовом режиме (demo) звёзды не списываются — так же, как в веб-версии.
+        if PAYMENTS == "demo":
+            return DemoProvider()
+        return StarsProvider(d["stars"]) if tg.enabled() and d and d.get("stars") else None
     return {"demo": DemoProvider(), "yookassa": YooKassaProvider()}.get(PAYMENTS)
 
 
-def checkout(user, plan: str, duration_id: str) -> dict:
+def checkout(user, plan: str, duration_id: str, channel: str = "web") -> dict:
     d = duration(plan, duration_id)
     if not d:
         raise BillingError("Выберите тариф и срок.")
-    prov = provider()
+    prov = provider(channel, d)
     if not prov:
         raise BillingError("Оплата временно недоступна.")
     with db.tx() as c:
@@ -114,6 +144,8 @@ def checkout(user, plan: str, duration_id: str) -> dict:
         return {"status": "succeeded", "ends_at": mark_paid(pid)}
     if res.get("confirmation_url"):
         return {"status": "redirect", "url": res["confirmation_url"]}
+    if res.get("invoice_url"):
+        return {"status": "invoice", "url": res["invoice_url"]}
     return {"status": "pending"}
 
 

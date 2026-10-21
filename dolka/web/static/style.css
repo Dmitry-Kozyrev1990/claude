@@ -95,3 +95,5 @@ pre.chat { white-space: pre-wrap; background: var(--bg); border: 1px solid var(-
 .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .price { font-size: 2rem; font-weight: 800; }
 .line-fact { width: 90px; padding: 6px 8px; }
+/* В мини-приложении Telegram своя шапка и главная кнопка — убираем лишние отступы снизу */
+body.tg .wrap { padding-bottom: 24px; }

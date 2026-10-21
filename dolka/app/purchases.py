@@ -15,7 +15,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
-from . import auth, db
+from . import auth, db, tg
 
 TZ = ZoneInfo("Europe/Moscow")
 STATUSES = {
@@ -269,6 +269,13 @@ def order_by_token(p, token: str | None):
     return db.one("SELECT * FROM orders WHERE purchase_id = ? AND token_hash = ?", p["id"], auth.token_hash(token))
 
 
+def order_by_tg(p, tg_id: int | None):
+    """В мини-приложении Telegram заказ привязан к аккаунту участника, а не к личной ссылке."""
+    if not tg_id:
+        return None
+    return db.one("SELECT * FROM orders WHERE purchase_id = ? AND tg_id = ?", p["id"], tg_id)
+
+
 def clean_lines(p, raw: dict) -> dict[int, int]:
     items = {r["id"]: r for r in db.all_("SELECT * FROM items WHERE purchase_id = ?", p["id"])}
     lines = {}
@@ -286,8 +293,9 @@ def clean_lines(p, raw: dict) -> dict[int, int]:
     return lines
 
 
-def save_order(p, token: str | None, name: str, phone: str, comment: str, raw_lines: dict) -> str:
-    """Создаёт или меняет заказ участника. Возвращает токен личной ссылки."""
+def save_order(p, existing, name: str, phone: str, comment: str, raw_lines: dict,
+               tg_id: int | None = None) -> tuple[int, str | None]:
+    """Создаёт или меняет заказ участника. Возвращает (id заказа, токен личной ссылки — только для нового)."""
     if not accepting_orders(p):
         raise PurchaseError("Сбор заказов закрыт.")
     name = (name or "").strip()[:80]
@@ -298,7 +306,7 @@ def save_order(p, token: str | None, name: str, phone: str, comment: str, raw_li
     lines = clean_lines(p, raw_lines)
     if not lines:
         raise PurchaseError("Выберите хотя бы одну позицию.")
-    existing = order_by_token(p, token)
+    token = None
     with db.tx() as c:
         if existing:
             oid = existing["id"]
@@ -307,12 +315,12 @@ def save_order(p, token: str | None, name: str, phone: str, comment: str, raw_li
             c.execute("DELETE FROM order_lines WHERE order_id = ?", (oid,))
         else:
             token = secrets.token_urlsafe(18)
-            oid = c.execute("INSERT INTO orders (purchase_id, token_hash, name, phone, comment, created_at, updated_at) "
-                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                            (p["id"], auth.token_hash(token), name, phone, comment, db.now(), db.now())).lastrowid
+            oid = c.execute("INSERT INTO orders (purchase_id, token_hash, name, phone, comment, tg_id, created_at, "
+                            "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            (p["id"], auth.token_hash(token), name, phone, comment, tg_id, db.now(), db.now())).lastrowid
         c.executemany("INSERT INTO order_lines (order_id, item_id, qty_milli) VALUES (?, ?, ?)",
                       [(oid, i, q) for i, q in lines.items()])
-    return token
+    return oid, token
 
 
 def cancel_order(p, order):
@@ -416,7 +424,7 @@ def _base(p) -> dict:
     return {"slug": p["slug"], "title": p["title"], "supplier": p["supplier"], "description": p["description"],
             "deadline": p["deadline"], "min_total_kop": p["min_total_kop"], "fee_pct": p["fee_pct"],
             "pickup": p["pickup"], "pay_info": p["pay_info"], "status": p["status"],
-            "status_name": STATUSES[p["status"]], "accepting": accepting_orders(p)}
+            "status_name": STATUSES[p["status"]], "accepting": accepting_orders(p), "tg_link": tg.start_link(p["slug"])}
 
 
 def owner_view(p) -> dict:

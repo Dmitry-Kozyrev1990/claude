@@ -1,7 +1,16 @@
-// Общие помощники для кабинета организатора и страницы участника.
+// Общие помощники для кабинета организатора и страницы участника — в браузере и в мини-приложении Telegram.
+const TG = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData ? window.Telegram.WebApp : null;
+let mainButtonHandler = null;
+let backButtonHandler = null;
+
 const D = {
+  tg: TG,          // объект Telegram.WebApp, если страница открыта как мини-приложение
+  session: null,   // сессия организатора в Telegram (вместо cookie)
   async api(method, url, body, headers = {}) {
-    const opts = { method, headers: { "X-Requested-With": "dolka", ...headers }, credentials: "same-origin" };
+    const base = { "X-Requested-With": "dolka" };
+    if (D.session) base.Authorization = "Bearer " + D.session;
+    if (TG) base["X-Tg-Init-Data"] = TG.initData;
+    const opts = { method, headers: { ...base, ...headers }, credentials: "same-origin" };
     if (body !== undefined) {
       opts.headers["Content-Type"] = "application/json";
       opts.body = JSON.stringify(body);
@@ -45,6 +54,65 @@ const D = {
   async copy(text) {
     try { await navigator.clipboard.writeText(text); D.toast("Скопировано"); }
     catch (e) { window.prompt("Скопируйте:", text); }
+  },
+  async confirm(msg) {
+    if (TG && TG.showConfirm) return new Promise(resolve => TG.showConfirm(msg, ok => resolve(!!ok)));
+    return window.confirm(msg);
+  },
+  haptic(kind) {
+    try { if (TG && TG.HapticFeedback) TG.HapticFeedback.notificationOccurred(kind); } catch (e) { /* старый клиент */ }
+  },
+  // Отправить ссылку в чат: в Telegram — штатный выбор чата, в браузере — системное «Поделиться» или копирование.
+  share(url, text) {
+    if (TG) { TG.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text || "")}`); return; }
+    if (navigator.share) { navigator.share({ url, text }).catch(() => {}); return; }
+    D.copy((text ? text + "\n" : "") + url);
+  },
+  // Скачать CSV: сервер выдаёт одноразовую подписанную ссылку, она работает и без cookie (в Telegram).
+  async download(linkUrl) {
+    const res = await D.api("POST", linkUrl);
+    if (TG && TG.isVersionAtLeast && TG.isVersionAtLeast("8.0") && TG.downloadFile) TG.downloadFile({ url: res.url, file_name: res.file_name });
+    else if (TG) TG.openLink(res.url);
+    else location.href = res.url;
+  },
+  mainButton(text, fn) {
+    if (!TG) return;
+    if (mainButtonHandler) TG.MainButton.offClick(mainButtonHandler);
+    mainButtonHandler = null;
+    if (!text) { TG.MainButton.hide(); return; }
+    mainButtonHandler = fn;
+    TG.MainButton.setText(text);
+    TG.MainButton.onClick(fn);
+    TG.MainButton.show();
+  },
+  backButton(fn) {
+    if (!TG) return;
+    if (backButtonHandler) TG.BackButton.offClick(backButtonHandler);
+    backButtonHandler = fn || null;
+    if (!fn) { TG.BackButton.hide(); return; }
+    TG.BackButton.onClick(fn);
+    TG.BackButton.show();
+  },
+  // Цвета Telegram поверх наших токенов, чтобы мини-приложение выглядело родным в любой теме.
+  applyTgTheme() {
+    if (!TG) return;
+    const tp = TG.themeParams || {};
+    const r = document.documentElement;
+    r.dataset.theme = TG.colorScheme === "dark" ? "dark" : "light";
+    const map = { "--bg": tp.secondary_bg_color || tp.bg_color, "--card": tp.section_bg_color || tp.bg_color,
+      "--ink": tp.text_color, "--muted": tp.hint_color, "--accent": tp.button_color,
+      "--accent-ink": tp.button_text_color, "--bad": tp.destructive_text_color };
+    Object.entries(map).forEach(([k, v]) => { if (v) r.style.setProperty(k, v); });
+    r.style.setProperty("--line", "color-mix(in srgb, var(--muted) 28%, transparent)");
+    r.style.setProperty("--accent-soft", "color-mix(in srgb, var(--accent) 14%, transparent)");
+    try { TG.setHeaderColor("secondary_bg_color"); } catch (e) { /* старый клиент */ }
+    try { if (map["--bg"]) TG.setBackgroundColor(map["--bg"]); } catch (e) { /* старый клиент */ }
+  },
+  tgUserName() {
+    const u = TG && TG.initDataUnsafe && TG.initDataUnsafe.user;
+    if (!u) return "";
+    const name = [u.first_name, u.last_name].filter(Boolean).join(" ");
+    return u.username ? (name ? `${name} (@${u.username})` : "@" + u.username) : name;
   },
   store: {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },

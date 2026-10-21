@@ -1,5 +1,6 @@
 // Кабинет организатора: закупки, позиции и коробки, участники, оплаты, факт по весу, раздача, тексты для чата.
-(function () {
+// В Telegram (window.DOLKA_TG) запускается из tg-boot.js: вход по initData, кнопка «Назад», оплата звёздами.
+window.DolkaApp = (function () {
   const root = document.getElementById("root");
   let ME = null;            // /api/me
   let P = null;             // открытая закупка (owner_view)
@@ -9,11 +10,21 @@
 
   const go = h => { location.hash = h; };
   const route = () => location.hash.replace(/^#/, "").split("/");
-  const shareUrl = p => `${location.origin}/z/${p.slug}`;
+  const webUrl = p => `${location.origin}/z/${p.slug}`;
+  // В чат отправляем ссылку на мини-приложение, если бот настроен; веб-ссылка остаётся запасной.
+  const shareUrl = p => p.tg_link || webUrl(p);
   const pct = v => String(v).replace(".", ",");
 
   async function start() {
-    try { ME = await D.api("GET", "/api/me"); } catch (e) { root.innerHTML = `<div class="err">${D.esc(e.message)}</div>`; return; }
+    try {
+      if (D.tg) {
+        const res = await D.api("POST", "/api/tg/auth", { init_data: D.tg.initData });
+        D.session = res.session;
+        ME = res;
+      } else {
+        ME = await D.api("GET", "/api/me");
+      }
+    } catch (e) { root.innerHTML = `<div class="err">${D.esc(e.message)}</div>`; return; }
     window.addEventListener("hashchange", show);
     show();
   }
@@ -22,6 +33,7 @@
     error = "";
     if (!ME.me) return renderAuth(route()[0] === "login" ? "login" : "register");
     const [view, id, tab] = route();
+    D.backButton(view ? () => go(view === "p" && tab && tab !== "items" ? `p/${id}` : "") : null);
     try {
       if (view === "p" && id) { P = await D.api("GET", `/api/purchases/${id}`); return renderPurchase(tab || "items"); }
       if (view === "new") return renderPurchaseForm(null);
@@ -36,7 +48,7 @@
   function top() {
     const badge = ME.plan === "pro" ? `<span class="badge">${ME.trial ? "Пробный «Про»" : "Про"}</span>` : `<span class="badge grey">Бесплатный</span>`;
     return `<div class="top"><a class="logo" href="#"><img src="/static/icon.svg" alt="">Долька</a>
-      <div class="row"><a href="#plan">${badge}</a><button class="ghost sm" id="logout">Выйти</button></div></div>`;
+      <div class="row"><a href="#plan">${badge}</a>${D.tg ? "" : `<button class="ghost sm" id="logout">Выйти</button>`}</div></div>`;
   }
 
   function bindTop() {
@@ -117,7 +129,7 @@
   }
 
   function renderPurchaseForm() {
-    root.innerHTML = top() + `<a href="#">← Закупки</a><h1 style="margin-top:12px">Новая закупка</h1>
+    root.innerHTML = top() + `${D.tg ? "" : `<a href="#">← Закупки</a>`}<h1 style="margin-top:12px">Новая закупка</h1>
       <div class="err hidden" id="err"></div>
       <form class="card" id="f">${purchaseFields(null)}<button class="primary">Создать и добавить позиции</button></form>`;
     bindTop();
@@ -150,12 +162,14 @@
     else if (tab === "chat") body = chatTab();
     else if (tab === "settings") body = settingsTab();
     else body = itemsTab();
-    root.innerHTML = top() + `<a href="#">← Закупки</a>
+    root.innerHTML = top() + `${D.tg ? "" : `<a href="#">← Закупки</a>`}
       <div class="card" style="margin-top:12px">
         <div class="row between"><h1 style="margin:0">${D.esc(P.title)}</h1>
           <select id="status" style="width:auto">${statusOpts}</select></div>
         <div class="small muted" style="margin-top:4px">${P.supplier ? D.esc(P.supplier) + " · " : ""}${P.deadline ? "стоп " + D.date(P.deadline) : "без даты стопа"}${P.status === "open" && !P.accepting ? " · стоп прошёл, участники уже не могут менять заказы" : ""}</div>
-        <div class="row" style="margin-top:12px"><input readonly value="${D.esc(shareUrl(P))}" style="flex:1;min-width:0"><button id="copyShare">Копировать ссылку</button></div>
+        <div class="row" style="margin-top:12px"><input readonly value="${D.esc(shareUrl(P))}" style="flex:1;min-width:0"><button id="copyShare">Копировать</button>
+          <button class="primary" id="shareP">Отправить в чат</button></div>
+        ${P.tg_link ? `<div class="small muted" style="margin-top:6px">Без Telegram: ${D.esc(webUrl(P))}</div>` : ""}
         ${minLine}
       </div>
       <div class="stats" style="margin-bottom:12px">
@@ -170,6 +184,7 @@
     bindTop();
     root.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => go(`p/${P.id}/${b.dataset.tab}`));
     document.getElementById("copyShare").onclick = () => D.copy(shareUrl(P));
+    document.getElementById("shareP").onclick = () => D.share(shareUrl(P), `🛒 Совместная закупка: ${P.title}`);
     document.getElementById("status").onchange = ev => act(() => D.api("PUT", `/api/purchases/${P.id}`, { status: ev.target.value }));
     bindTab(tab);
   }
@@ -191,7 +206,7 @@
     const e = editItem ? P.items.find(i => i.id === editItem) : null;
     const units = ME.units.map(u => `<option ${e && e.unit === u ? "selected" : ""}>${u}</option>`).join("");
     return `<div class="card"><div class="row between"><h2 style="margin:0">Позиции</h2>
-        ${P.items.length ? `<a class="btn sm" href="/api/purchases/${P.id}/export/supplier.csv">Заказ поставщику (CSV)</a>` : ""}</div>
+        ${P.items.length ? `<button class="sm" data-export="supplier">Заказ поставщику (CSV)</button>` : ""}</div>
         <div class="list">${rows || `<p class="muted" style="margin-top:8px">Добавьте позиции из прайса поставщика.</p>`}</div></div>
       <form class="card" id="itemForm">
         <h3>${e ? "Изменить позицию" : "Добавить позицию"}</h3>
@@ -208,7 +223,7 @@
 
   function bindItems() {
     root.querySelectorAll("[data-trim]").forEach(b => b.onclick = async () => {
-      if (!confirm("Снять остаток до целой коробки с самых поздних заказов?")) return;
+      if (!await D.confirm("Снять остаток до целой коробки с самых поздних заказов?")) return;
       try {
         const res = await D.api("POST", `/api/items/${b.dataset.trim}/trim`);
         P = res.purchase;
@@ -217,9 +232,9 @@
       renderPurchase("items");
     });
     root.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { editItem = +b.dataset.edit; renderPurchase("items"); document.getElementById("itemForm").scrollIntoView(); });
-    root.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
+    root.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
       const i = P.items.find(x => x.id === +b.dataset.del);
-      if (!confirm(`Удалить «${i.name}»?${i.total_milli ? " Позиция пропадёт из заказов участников." : ""}`)) return;
+      if (!await D.confirm(`Удалить «${i.name}»?${i.total_milli ? " Позиция пропадёт из заказов участников." : ""}`)) return;
       act(() => D.api("DELETE", `/api/items/${i.id}`));
     });
     const c = document.getElementById("cancelItem");
@@ -264,7 +279,7 @@
         </div></div>`;
     }).join("");
     return `<div class="row between" style="margin-bottom:8px"><div class="tabs" style="margin:0;padding:0">${chips}</div>
-        ${P.orders.length ? `<a class="btn sm" href="/api/purchases/${P.id}/export/orders.csv">Лист раздачи (CSV)</a>` : ""}</div>
+        ${P.orders.length ? `<button class="sm" data-export="orders">Лист раздачи (CSV)</button>` : ""}</div>
       ${P.orders.length ? `<p class="small muted">«Факт» — сколько реально приехало по весу; сумма участника пересчитается автоматически.</p>` : ""}
       ${cards || `<div class="card muted">${P.orders.length ? "Нет участников в этом фильтре." : "Пока никто не заказал. Отправьте ссылку в чат — вкладка «Тексты для чата»."}</div>`}`;
   }
@@ -283,9 +298,9 @@
     });
     root.querySelectorAll("[data-picked]").forEach(cb => cb.onchange = () =>
       act(() => D.api("PUT", `/api/orders/${cb.dataset.picked}`, { picked_up: cb.checked })));
-    root.querySelectorAll("[data-delorder]").forEach(b => b.onclick = () => {
+    root.querySelectorAll("[data-delorder]").forEach(b => b.onclick = async () => {
       const o = P.orders.find(x => x.id === +b.dataset.delorder);
-      if (confirm(`Удалить заказ участника ${o.name}?`)) act(() => D.api("DELETE", `/api/orders/${o.id}`));
+      if (await D.confirm(`Удалить заказ участника ${o.name}?`)) act(() => D.api("DELETE", `/api/orders/${o.id}`));
     });
   }
 
@@ -297,30 +312,34 @@
     if (P.supplier) head.push(`Поставщик: ${P.supplier}`);
     if (P.deadline) head.push(`Стоп заказов: ${D.date(P.deadline)}`);
     head.push(P.fee_pct ? `Оргсбор: ${pct(P.fee_pct)}%` : "Без оргсбора");
-    const announce = [...head, "", list, "", `Заказать (без регистрации): ${url}`].join("\n");
+    const announce = [...head, "", list, "", `Заказать (без регистрации): ${url}`,
+      ...(P.tg_link ? [`Если Telegram не открывает: ${webUrl(P)}`] : [])].join("\n");
     const debtors = P.orders.filter(o => o.balance_kop > 0);
     const remind = debtors.length ? [`💳 Напоминаю об оплате закупки «${P.title}»:`,
       ...debtors.map(o => `— ${o.name}: ${D.rub(o.balance_kop)}${o.says_paid ? " (отметили оплату — проверяю)" : ""}`),
-      "", ...(P.pay_info ? [`Как оплатить: ${P.pay_info}`] : []), "Сумму и состав заказа видно по вашей личной ссылке."].join("\n") : "";
+      "", ...(P.pay_info ? [`Как оплатить: ${P.pay_info}`] : []), `Сумма и состав заказа — по ссылке ${url}`].join("\n") : "";
     const open = P.items.filter(i => i.missing);
     const packs = open.length ? [`📦 Добираем коробки в закупке «${P.title}»:`,
       ...open.map(i => `— ${i.name}: не хватает ${i.missing} ${i.unit}`), "", `Добавить в заказ: ${url}`,
       "Если коробка не соберётся, остаток снимем с последних заказов."].join("\n") : "";
     const arrived = [`✅ Закупка «${P.title}» приехала!`, P.pickup ? `Раздача: ${P.pickup}` : "",
-      "Суммы пересчитаны по факту веса — проверьте свой заказ по личной ссылке.",
+      `Суммы пересчитаны по факту веса — проверьте свой заказ: ${url}`,
       P.pay_info ? `Доплата: ${P.pay_info}` : ""].filter(Boolean).join("\n");
     return [["Объявление о сборе", announce], ["Добор коробок", packs], ["Напоминание должникам", remind], ["Приехало, раздача", arrived]];
   }
 
   function chatTab() {
     return chatTexts().map(([t, txt], n) => `<div class="card"><h3>${t}</h3>
-      ${txt ? `<pre class="chat">${D.esc(txt)}</pre><button data-copytext="${n}">Копировать</button>`
+      ${txt ? `<pre class="chat">${D.esc(txt)}</pre><div class="row"><button data-copytext="${n}">Копировать</button>
+          ${D.tg ? `<button class="primary" data-sharetext="${n}">Отправить в чат</button>` : ""}</div>`
         : `<p class="muted small">${n === 1 ? "Все коробки собраны." : "Должников нет."}</p>`}</div>`).join("");
   }
 
   function bindChat() {
     const texts = chatTexts();
     root.querySelectorAll("[data-copytext]").forEach(b => b.onclick = () => D.copy(texts[+b.dataset.copytext][1]));
+    // В Telegram текст уходит в выбранный чат через t.me/share: ссылка — первой строкой превью.
+    root.querySelectorAll("[data-sharetext]").forEach(b => b.onclick = () => D.share(shareUrl(P), texts[+b.dataset.sharetext][1]));
   }
 
   // ---------- настройки ----------
@@ -342,12 +361,16 @@
       catch (e) { error = e.message; renderPurchase("settings"); }
     };
     document.getElementById("delP").onclick = async () => {
-      if (!confirm(`Удалить «${P.title}» вместе со всеми заказами?`)) return;
+      if (!await D.confirm(`Удалить «${P.title}» вместе со всеми заказами?`)) return;
       await D.api("DELETE", `/api/purchases/${P.id}`); go("");
     };
   }
 
   function bindTab(tab) {
+    root.querySelectorAll("[data-export]").forEach(b => b.onclick = async () => {
+      try { await D.download(`/api/purchases/${P.id}/export/${b.dataset.export}/link`); }
+      catch (e) { D.toast(e.message); }
+    });
     ({ items: bindItems, orders: bindOrders, chat: bindChat, settings: bindSettings }[tab] || bindItems)();
   }
 
@@ -355,22 +378,32 @@
   function renderPlan() {
     const pro = ME.plans.pro;
     const until = ME.sub_ends ? `<p>${ME.trial ? "Пробный период" : "Подписка"} действует до <b>${D.date(ME.sub_ends)}</b>.</p>` : "";
-    root.innerHTML = top() + `<a href="#">← Закупки</a><h1 style="margin-top:12px">Тариф</h1>
+    root.innerHTML = top() + `${D.tg ? "" : `<a href="#">← Закупки</a>`}<h1 style="margin-top:12px">Тариф</h1>
       <div class="err hidden" id="err"></div>
       <div class="card"><h2>Бесплатный</h2><p>1 незакрытая закупка, до 15 участников в ней. Все функции.</p></div>
       <div class="card"><h2>Про</h2><p>Без ограничений по закупкам и участникам.</p>${until}
-        <div class="row">${pro.durations.map(d => `<button class="${d.id === "1m" ? "primary" : ""}" data-buy="${d.id}">${d.label} — ${D.rub(d.price_rub * 100)}</button>`).join("")}</div>
+        <div class="row">${pro.durations.map(d => `<button class="${d.id === "1m" ? "primary" : ""}" data-buy="${d.id}">${d.label} — ${D.tg ? `${d.stars} ⭐` : D.rub(d.price_rub * 100)}</button>`).join("")}</div>
+        ${D.tg ? `<p class="small muted" style="margin-top:8px">В Telegram подписка оплачивается звёздами (Telegram Stars).</p>` : ""}
         ${ME.payments === "demo" ? `<p class="small muted" style="margin-top:8px">Тестовый режим: подписка включится без списания денег.</p>` : ""}
       </div>`;
     bindTop();
     root.querySelectorAll("[data-buy]").forEach(b => b.onclick = async () => {
       try {
-        const res = await D.api("POST", "/api/checkout", { plan: "pro", duration: b.dataset.buy });
+        const res = await D.api("POST", "/api/checkout", { plan: "pro", duration: b.dataset.buy, channel: D.tg ? "tg" : "web" });
         if (res.status === "redirect") { location.href = res.url; return; }
-        ME = await D.api("GET", "/api/me"); D.toast("Тариф «Про» подключён"); renderPlan();
+        if (res.status === "invoice") {
+          D.tg.openInvoice(res.url, async status => {
+            if (status !== "paid") return;
+            // подписку включает вебхук successful_payment — даём ему секунду дойти
+            setTimeout(async () => { ME = { ...ME, ...await D.api("GET", "/api/me") }; D.haptic("success"); D.toast("Тариф «Про» подключён"); renderPlan(); }, 1200);
+          });
+          return;
+        }
+        ME = { ...ME, ...await D.api("GET", "/api/me") }; D.haptic("success"); D.toast("Тариф «Про» подключён"); renderPlan();
       } catch (e) { const el = document.getElementById("err"); el.textContent = e.message; el.classList.remove("hidden"); }
     });
   }
 
-  start();
+  if (!window.DOLKA_TG) start();
+  return { start };
 })();
