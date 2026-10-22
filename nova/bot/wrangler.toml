@@ -14,7 +14,10 @@ database_id = "REPLACE_WITH_D1_ID" # wrangler d1 create nova-bot
 [vars]
 BOT_USERNAME = "REPLACE_BOT_USERNAME"      # без @
 SUPPORT_USERNAME = "REPLACE_SUPPORT"       # без @, куда писать живому человеку
-VAT_CODE = "1"                             # 1 = без НДС (ИП на УСН/патенте)
 
-# Секреты задаются командой `wrangler secret put <NAME>`:
-#   BOT_TOKEN, WEBHOOK_SECRET, YK_SHOP_ID, YK_SECRET_KEY, ADMIN_ID
+# Секреты задаются командой `npx wrangler secret put <NAME>`:
+#   BOT_TOKEN       токен от @BotFather
+#   WEBHOOK_SECRET  длинная случайная строка
+#   ADMIN_IDS       ваш Telegram id (несколько через запятую)
+#   CARD_NUMBER     номер карты Озон Банка, например 2204 1234 5678 9012
+#   CARD_HOLDER     получатель, например «Дмитрий К.»

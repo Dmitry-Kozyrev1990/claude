@@ -1,30 +1,40 @@
 CREATE TABLE IF NOT EXISTS users (
   tg_id      INTEGER PRIMARY KEY,
   username   TEXT,
-  segment    TEXT,
-  source     TEXT,
-  email      TEXT,
-  state      TEXT,
+  first_name TEXT,
+  age        TEXT,                         -- a7_9 | a10_12 | a13_14 | multi
+  source     TEXT,                         -- метка из t.me/<bot>?start=<source>
+  state      TEXT,                         -- receipt:<order_id>, когда ждём чек
   created_at INTEGER NOT NULL,
   blocked    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS orders (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  tg_id         INTEGER NOT NULL,
-  course_id     TEXT NOT NULL,
-  amount        INTEGER NOT NULL,          -- в копейках
-  status        TEXT NOT NULL DEFAULT 'pending', -- pending | paid | canceled
-  yk_payment_id TEXT UNIQUE,
-  created_at    INTEGER NOT NULL,
-  paid_at       INTEGER
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  tg_id        INTEGER NOT NULL,
+  course_id    TEXT NOT NULL,
+  amount       INTEGER NOT NULL,           -- рубли
+  status       TEXT NOT NULL DEFAULT 'awaiting', -- awaiting | review | paid | rejected | canceled
+  receipt_kind TEXT,                       -- photo | document | text
+  receipt      TEXT,                       -- file_id или текст от покупателя
+  created_at   INTEGER NOT NULL,
+  paid_at      INTEGER,
+  decided_by   INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(tg_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+
+CREATE TABLE IF NOT EXISTS progress (
+  tg_id     INTEGER NOT NULL,
+  course_id TEXT NOT NULL,
+  done      INTEGER NOT NULL DEFAULT 0,    -- сколько встреч пройдено
+  PRIMARY KEY (tg_id, course_id)
+);
 
 CREATE TABLE IF NOT EXISTS jobs (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
   tg_id   INTEGER NOT NULL,
-  kind    TEXT NOT NULL,                   -- nurture1 | nurture2 | cart
+  kind    TEXT NOT NULL,                   -- nurture1 | nurture2 | nurture3 | cart
   ref     INTEGER,                         -- order_id для cart
   run_at  INTEGER NOT NULL,
   done    INTEGER NOT NULL DEFAULT 0

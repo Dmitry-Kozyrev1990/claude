@@ -2,7 +2,7 @@ name: Deploy Nova bot
 
 on:
   push:
-    branches: [main]
+    branches: [claude/sleepy-heisenberg-7avpr3]  # ветка по умолчанию в репозитории
     paths: ["nova/bot/**"]
   workflow_dispatch:
 
@@ -21,6 +21,7 @@ jobs:
           cache-dependency-path: nova/bot/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
