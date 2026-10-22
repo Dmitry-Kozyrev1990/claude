@@ -13,7 +13,7 @@ database_id = "REPLACE_WITH_D1_ID" # wrangler d1 create nova-bot
 
 [vars]
 BOT_USERNAME = "REPLACE_BOT_USERNAME"      # без @
-SUPPORT_USERNAME = "REPLACE_SUPPORT"       # без @, ваш личный Telegram: сюда пишут для оплаты
+SUPPORT_USERNAME = "dmitrykozyrev"         # без @, ваш личный Telegram: сюда пишут для оплаты
 
 # Секреты задаются командой `npx wrangler secret put <NAME>`:
 #   BOT_TOKEN       токен от @BotFather
