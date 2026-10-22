@@ -8,7 +8,6 @@ export interface User {
   first_name: string | null;
   age: string | null;
   source: string | null;
-  state: string | null;
   blocked: number;
 }
 
@@ -17,9 +16,7 @@ export interface Order {
   tg_id: number;
   course_id: string;
   amount: number;
-  status: "awaiting" | "review" | "paid" | "rejected" | "canceled";
-  receipt_kind: string | null;
-  receipt: string | null;
+  status: "awaiting" | "paid" | "rejected" | "canceled";
   created_at: number;
 }
 
@@ -42,9 +39,6 @@ export const getUser = (env: Env, id: number) => one<User>(env, "SELECT * FROM u
 
 export const setAge = (env: Env, id: number, age: string) => run(env, "UPDATE users SET age = ?1 WHERE tg_id = ?2", age, id);
 
-export const setState = (env: Env, id: number, state: string | null) =>
-  run(env, "UPDATE users SET state = ?1 WHERE tg_id = ?2", state, id);
-
 export const markBlocked = (env: Env, id: number) => run(env, "UPDATE users SET blocked = 1 WHERE tg_id = ?1", id);
 
 // --- заказы ---
@@ -64,15 +58,8 @@ export const getOrder = (env: Env, id: number) => one<Order>(env, "SELECT * FROM
 export const openOrder = (env: Env, tgId: number, courseId: string) =>
   one<Order>(
     env,
-    "SELECT * FROM orders WHERE tg_id = ?1 AND course_id = ?2 AND status IN ('awaiting','review') ORDER BY id DESC LIMIT 1",
+    "SELECT * FROM orders WHERE tg_id = ?1 AND course_id = ?2 AND status = 'awaiting' ORDER BY id DESC LIMIT 1",
     tgId, courseId,
-  );
-
-export const attachReceipt = (env: Env, orderId: number, kind: string, receipt: string) =>
-  run(
-    env,
-    "UPDATE orders SET status = 'review', receipt_kind = ?1, receipt = ?2 WHERE id = ?3 AND status IN ('awaiting','review')",
-    kind, receipt, orderId,
   );
 
 /** Решение админа. true только для первого решения: двойное нажатие ничего не ломает. */
@@ -80,7 +67,7 @@ export async function decide(env: Env, orderId: number, status: "paid" | "reject
   const r = await run(
     env,
     `UPDATE orders SET status = ?1, decided_by = ?2, paid_at = CASE WHEN ?1 = 'paid' THEN ?3 ELSE NULL END
-     WHERE id = ?4 AND status IN ('awaiting','review')`,
+     WHERE id = ?4 AND status = 'awaiting'`,
     status, adminId, now(), orderId,
   );
   return (r.meta.changes ?? 0) > 0;
@@ -89,8 +76,9 @@ export async function decide(env: Env, orderId: number, status: "paid" | "reject
 export const cancelOrder = (env: Env, orderId: number, tgId: number) =>
   run(env, "UPDATE orders SET status = 'canceled' WHERE id = ?1 AND tg_id = ?2 AND status = 'awaiting'", orderId, tgId);
 
-export const reviewQueue = (env: Env) =>
-  all<Order>(env, "SELECT * FROM orders WHERE status = 'review' ORDER BY id LIMIT 20");
+/** Заказы, которые ждут оплаты: по ним админ подтверждает или отклоняет. */
+export const awaitingQueue = (env: Env) =>
+  all<Order>(env, "SELECT * FROM orders WHERE status = 'awaiting' ORDER BY id LIMIT 20");
 
 export const recentOrders = (env: Env) => all<Order>(env, "SELECT * FROM orders ORDER BY id DESC LIMIT 10");
 
@@ -141,13 +129,13 @@ export const finishJob = (env: Env, id: number) => run(env, "UPDATE jobs SET don
 
 export async function stats(env: Env) {
   const dayAgo = now() - 86400;
-  const [users, newUsers, paid, review, ages, sources] = await Promise.all([
+  const [users, newUsers, paid, awaiting, ages, sources] = await Promise.all([
     one<{ n: number }>(env, "SELECT COUNT(*) AS n FROM users"),
     one<{ n: number }>(env, "SELECT COUNT(*) AS n FROM users WHERE created_at >= ?1", dayAgo),
     one<{ n: number; s: number; buyers: number }>(
       env, "SELECT COUNT(*) AS n, COALESCE(SUM(amount),0) AS s, COUNT(DISTINCT tg_id) AS buyers FROM orders WHERE status = 'paid' AND amount > 0",
     ),
-    one<{ n: number }>(env, "SELECT COUNT(*) AS n FROM orders WHERE status = 'review'"),
+    one<{ n: number }>(env, "SELECT COUNT(*) AS n FROM orders WHERE status = 'awaiting'"),
     all<{ age: string; n: number }>(env, "SELECT COALESCE(age,'—') AS age, COUNT(*) AS n FROM users GROUP BY age"),
     all<{ source: string; n: number }>(
       env, "SELECT COALESCE(source,'—') AS source, COUNT(*) AS n FROM users GROUP BY source ORDER BY n DESC LIMIT 5",
@@ -159,7 +147,7 @@ export async function stats(env: Env) {
     paid: paid?.n ?? 0,
     revenue: paid?.s ?? 0,
     buyers: paid?.buyers ?? 0,
-    review: review?.n ?? 0,
+    awaiting: awaiting?.n ?? 0,
     ages,
     sources,
   };

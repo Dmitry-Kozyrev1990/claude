@@ -4,10 +4,8 @@ export interface Env {
   WEBHOOK_SECRET: string;
   /** Telegram id админов через запятую */
   ADMIN_IDS: string;
-  /** Реквизиты для перевода (секреты, в репозиторий не попадают) */
-  CARD_NUMBER: string;
-  CARD_HOLDER: string;
   BOT_USERNAME: string;
+  /** username (без @), кому писать для оплаты и вопросов */
   SUPPORT_USERNAME: string;
 }
 

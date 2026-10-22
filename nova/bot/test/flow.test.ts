@@ -10,8 +10,7 @@ for (const stmt of readFileSync("schema.sql", "utf8").split(";").map((s) => s.tr
   await DB.prepare(stmt).run();
 }
 const env: Env = {
-  DB, BOT_TOKEN: "1:x", WEBHOOK_SECRET: "s", ADMIN_IDS: "900", CARD_NUMBER: "2204 0000 0000 0000",
-  CARD_HOLDER: "Дмитрий К.", BOT_USERNAME: "nova_bot", SUPPORT_USERNAME: "nova_help",
+  DB, BOT_TOKEN: "1:x", WEBHOOK_SECRET: "s", ADMIN_IDS: "900", BOT_USERNAME: "nova_bot", SUPPORT_USERNAME: "nova_help",
 };
 
 const calls: { method: string; payload: any }[] = [];
@@ -55,31 +54,25 @@ check("повторный выбор возраста не дублирует п
 await cb(U, "ncourse:learn");
 check("карточка курса с кнопкой покупки", textOf(last()).includes("790 ₽") && buttons(last()).includes("buy:learn"), last());
 
+const b1 = calls.length;
 await cb(U, "buy:learn");
-check("реквизиты: карта, сумма, номер заказа", textOf(last()).includes("2204 0000 0000 0000") && textOf(last()).includes("№1") && textOf(last()).includes("790"), textOf(last()));
+const toUser = calls.slice(b1).find((c) => c.payload.chat_id === U && c.method === "sendMessage");
+const payUrl = buttons(toUser).find((b: string) => b?.startsWith("https://t.me/nova_help")) ?? "";
+check("покупателю: заказ, сумма и кнопка «Написать для оплаты»", textOf(toUser).includes("№1") && textOf(toUser).includes("790") && !!payUrl, toUser);
+check("в кнопке готовый текст с номером заказа", decodeURIComponent(payUrl).includes("заказ №1 «Как машина учится»"), payUrl);
+const toAdmin = calls.slice(b1).find((c) => c.payload.chat_id === "900");
+check("админу пришёл заказ с кнопками и ссылкой на покупателя", buttons(toAdmin).includes("ok:1") && textOf(toAdmin).includes('tg://user?id=111'), toAdmin);
+const b1b = calls.length;
 await cb(U, "buy:learn");
 const orders = await DB.prepare("SELECT COUNT(*) n FROM orders").first<{ n: number }>();
-check("повторное «Купить» не создаёт второй заказ", orders?.n === 1, orders);
-
-await cb(OTHER, "sent:1");
-const st = await DB.prepare("SELECT state FROM users WHERE tg_id=?").bind(OTHER).first();
-check("чужой пользователь не может прислать чек на чужой заказ", !st?.state, st);
-
-await cb(U, "sent:1");
-check("бот просит чек", textOf(last()).includes("скриншот"), last());
-const before = calls.length;
-await msg(U, { photo: [{ file_id: "small", width: 1, height: 1, file_unique_id: "a" }, { file_id: "big", width: 9, height: 9, file_unique_id: "b" }] });
-const after = calls.slice(before);
-const toAdmin = after.find((c) => c.method === "sendPhoto");
-check("админу ушло фото чека с кнопками решения", toAdmin?.payload.chat_id === "900" && toAdmin?.payload.photo === "big" && buttons(toAdmin).includes("ok:1"), after);
-check("покупатель получил «передал на проверку»", after.some((c) => c.method === "sendMessage" && c.payload.chat_id === U && c.payload.text.includes("на проверку")), after);
+check("повторное «Купить» не создаёт второй заказ и не дёргает админа", orders?.n === 1 && !calls.slice(b1b).some((c) => c.payload.chat_id === "900"), orders);
 
 await cb(U, "open:learn");
-check("до оплаты встречи закрыты", !sent().slice(-1)[0] || !textOf(last()).includes("Пройдено"), last());
+check("до оплаты встречи закрыты", !textOf(last()).includes("Пройдено"), last());
 
 await cb(U, "ok:1");
 const o1 = await DB.prepare("SELECT status FROM orders WHERE id=1").first<{ status: string }>();
-check("не-админ не может подтвердить оплату", o1?.status === "review", o1);
+check("не-админ не может подтвердить оплату", o1?.status === "awaiting", o1);
 
 const b2 = calls.length;
 await cb(ADMIN, "ok:1");
@@ -107,15 +100,17 @@ check("поздравление и следующая ступень", textOf(la
 await cb(OTHER, "les:learn:0");
 check("чужой пользователь не видит встречи купленного курса", !textOf(last()).includes("Встреча 1 из 5") || last().payload.chat_id !== OTHER, last());
 
-// отклонение
+// отклонение и отмена
 await msg(OTHER, { text: "/start", entities: [{ type: "bot_command", offset: 0, length: 6 }] });
 await cb(OTHER, "buy:hello");
-await cb(OTHER, "sent:2");
-await msg(OTHER, { text: "перевёл с карты на имя <Иван>" });
-const adminText = calls.filter((c) => c.payload.chat_id === "900").at(-1);
-check("текстовый чек экранирован для HTML", textOf(adminText).includes("&lt;Иван&gt;"), adminText);
 await cb(ADMIN, "no:2");
-check("отклонение: покупатель предупреждён", calls.some((c) => c.payload.chat_id === OTHER && c.payload.text?.includes("Не нашли перевод")));
+check("отклонение: покупатель предупреждён", calls.some((c) => c.payload.chat_id === OTHER && c.payload.text?.includes("закрыт без оплаты")));
+await cb(OTHER, "buy:safe");
+await cb(OTHER, "cancel:3");
+const b7 = calls.length;
+await cb(ADMIN, "ok:3");
+const o3 = await DB.prepare("SELECT status FROM orders WHERE id=3").first<any>();
+check("отменённый покупателем заказ нельзя подтвердить", o3?.status === "canceled" && !calls.slice(b7).some((c) => c.payload.chat_id === OTHER), o3);
 
 // пакет и ручная выдача
 await msg(ADMIN, { text: "/grant 222 all", entities: [{ type: "bot_command", offset: 0, length: 6 }] });

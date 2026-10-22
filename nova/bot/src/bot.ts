@@ -70,11 +70,12 @@ function outline(c: Course) {
   return `<b>${c.title}: встречи</b>\n\n` + c.lessons.map((l, i) => `${i + 1}. ${l.title} · ${l.minutes} мин`).join("\n");
 }
 
-function requisitesKb(env: Env, orderId: number) {
+/** Кнопка «написать для оплаты» открывает личку с готовым текстом про заказ. */
+function payKb(env: Env, orderId: number, title: string) {
+  const text = encodeURIComponent(`Здравствуйте! Хочу оплатить заказ №${orderId} «${title}»`);
   return new InlineKeyboard()
-    .text("✅ Перевод сделан", `sent:${orderId}`).row()
-    .text("Отменить заказ", `cancel:${orderId}`)
-    .url("💬 Написать нам", support(env));
+    .url("💬 Написать для оплаты", `${support(env)}?text=${text}`).row()
+    .text("Отменить заказ", `cancel:${orderId}`);
 }
 
 function decisionKb(orderId: number) {
@@ -95,22 +96,17 @@ async function lessonsList(env: Env, tgId: number, c: Course) {
   return { text, kb };
 }
 
-/** Уведомление админам о новом чеке. */
+/** Уведомление админам о заказе: после оплаты в личке админ жмёт «Подтвердить». */
 async function notifyAdmins(bot: Bot, env: Env, o: db.Order, who: string) {
   const c = courseById(o.course_id);
-  const caption =
+  const text =
     `🧾 <b>Заказ №${o.id}</b>: «${c?.title ?? o.course_id}», ${o.amount} ₽\n` +
-    `От: ${who} (id <code>${o.tg_id}</code>)` +
-    (o.receipt_kind === "text" ? `\n\nКомментарий: ${esc(o.receipt ?? "")}` : "");
+    `От: ${who} (id <code>${o.tg_id}</code>)\n\n` +
+    "Покупатель напишет вам в личку. Когда оплата придёт, нажмите «Подтвердить», курс откроется сам.";
   for (const admin of env.ADMIN_IDS.split(",").map((s) => s.trim()).filter(Boolean)) {
-    try {
-      const opts = { ...H, caption, reply_markup: decisionKb(o.id) };
-      if (o.receipt_kind === "photo") await bot.api.sendPhoto(admin, o.receipt!, opts);
-      else if (o.receipt_kind === "document") await bot.api.sendDocument(admin, o.receipt!, opts);
-      else await bot.api.sendMessage(admin, caption, { ...H, reply_markup: decisionKb(o.id) });
-    } catch (e) {
-      console.error("notify admin", admin, e);
-    }
+    await bot.api
+      .sendMessage(admin, text, { ...H, reply_markup: decisionKb(o.id) })
+      .catch((e) => console.error("notify admin", admin, e));
   }
 }
 
@@ -196,7 +192,7 @@ export function createBot(env: Env): Bot {
     if (c) await show(ctx, outline(c), new InlineKeyboard().text("⬅️ К курсу", `course:${c.id}`));
   });
 
-  // --- покупка переводом ---
+  // --- покупка через личку ---
 
   bot.callbackQuery(/^buy:([\w-]+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
@@ -208,31 +204,17 @@ export function createBot(env: Env): Bot {
       const orderId = await db.createOrder(env, id, c.id, c.price);
       await db.addJob(env, id, "cart", db.now() + HOUR, orderId);
       order = (await db.getOrder(env, orderId))!;
+      await notifyAdmins(bot, env, order, who(await db.getUser(env, id), id));
     }
-    if (order.status === "review") {
-      await ctx.reply(`Заказ №${order.id} уже на проверке. Как только перевод подтвердят, я напишу.`);
-      return;
-    }
-    await ctx.reply(TEXT.requisites(order.id, c.title, order.amount, env.CARD_NUMBER, env.CARD_HOLDER), {
+    await ctx.reply(TEXT.payContact(order.id, c.title, order.amount), {
       ...H,
-      reply_markup: requisitesKb(env, order.id),
+      reply_markup: payKb(env, order.id, c.title),
     });
-  });
-
-  bot.callbackQuery(/^sent:(\d+)$/, async (ctx) => {
-    await ctx.answerCallbackQuery();
-    const o = await db.getOrder(env, Number(ctx.match[1]));
-    if (!o || o.tg_id !== ctx.from.id) return;
-    if (o.status === "paid") return ctx.reply("Этот заказ уже оплачен, курс открыт в «Мои курсы».");
-    if (o.status !== "awaiting" && o.status !== "review") return ctx.reply("Этот заказ закрыт. Оформите новый в каталоге.");
-    await db.setState(env, ctx.from.id, `receipt:${o.id}`);
-    await ctx.reply(TEXT.askReceipt(o.id));
   });
 
   bot.callbackQuery(/^cancel:(\d+)$/, async (ctx) => {
     await ctx.answerCallbackQuery();
     await db.cancelOrder(env, Number(ctx.match[1]), ctx.from.id);
-    await db.setState(env, ctx.from.id, null);
     await show(ctx, "Заказ отменён. Если передумаете, он в каталоге.", new InlineKeyboard().text("📚 Каталог", "catalog"));
   });
 
@@ -300,7 +282,7 @@ export function createBot(env: Env): Bot {
   const adminKb = async () => {
     const s = await db.stats(env);
     return new InlineKeyboard()
-      .text(`📥 На проверке (${s.review})`, "adm:queue").row()
+      .text(`⏳ Ждут оплаты (${s.awaiting})`, "adm:queue").row()
       .text("📊 Статистика", "adm:stats").text("🧾 Последние заказы", "adm:recent");
   };
   const ADMIN_HELP =
@@ -326,7 +308,7 @@ export function createBot(env: Env): Bot {
     await show(
       ctx,
       `📊 <b>Статистика</b>\n\nПользователей: ${s.users} (за сутки +${s.newUsers})\n` +
-        `Оплат: ${s.paid} на ${s.revenue} ₽\nПокупателей: ${s.buyers} (${conv}% от всех)\nНа проверке: ${s.review}\n\n` +
+        `Оплат: ${s.paid} на ${s.revenue} ₽\nПокупателей: ${s.buyers} (${conv}% от всех)\nЖдут оплаты: ${s.awaiting}\n\n` +
         `<b>Возраст детей</b>\n${s.ages.map((a) => `${ageLabel(a.age)}: ${a.n}`).join("\n")}\n\n` +
         `<b>Источники</b>\n${s.sources.map((x) => `${esc(x.source)}: ${x.n}`).join("\n")}`,
       new InlineKeyboard().text("⬅️ Админ-панель", "adm"),
@@ -336,7 +318,7 @@ export function createBot(env: Env): Bot {
   bot.callbackQuery("adm:recent", async (ctx) => {
     await ctx.answerCallbackQuery();
     if (!isAdmin(env, ctx.from.id)) return;
-    const STATUS: Record<string, string> = { awaiting: "⏳ ждёт перевода", review: "📥 на проверке", paid: "✅ оплачен", rejected: "❌ отклонён", canceled: "отменён" };
+    const STATUS: Record<string, string> = { awaiting: "⏳ ждёт оплаты", paid: "✅ оплачен", rejected: "❌ отклонён", canceled: "отменён" };
     const rows = await db.recentOrders(env);
     await show(
       ctx,
@@ -349,11 +331,11 @@ export function createBot(env: Env): Bot {
   bot.callbackQuery("adm:queue", async (ctx) => {
     await ctx.answerCallbackQuery();
     if (!isAdmin(env, ctx.from.id)) return;
-    const q = await db.reviewQueue(env);
-    if (!q.length) return ctx.reply("Очередь пуста, всё проверено 👌");
+    const q = await db.awaitingQueue(env);
+    if (!q.length) return ctx.reply("Неоплаченных заказов нет 👌");
     for (const o of q) {
       const u = await db.getUser(env, o.tg_id);
-      await notifyAdmins(bot, { ...env, ADMIN_IDS: String(ctx.from.id) }, o, who(u));
+      await notifyAdmins(bot, { ...env, ADMIN_IDS: String(ctx.from.id) }, o, who(u, o.tg_id));
     }
   });
 
@@ -401,33 +383,15 @@ export function createBot(env: Env): Bot {
       .catch((e) => console.error("grant notify", e));
   });
 
-  // --- чек от покупателя: фото, файл или текст ---
-
-  bot.on(["message:photo", "message:document", "message:text"], async (ctx) => {
-    const u = await db.getUser(env, ctx.from.id);
-    const m = u?.state?.match(/^receipt:(\d+)$/);
-    if (!m) return ctx.reply("Нажмите /menu, чтобы открыть меню.");
-    const orderId = Number(m[1]);
-    const msg = ctx.message;
-    const [kind, receipt] = msg.photo
-      ? ["photo", msg.photo[msg.photo.length - 1].file_id]
-      : msg.document
-        ? ["document", msg.document.file_id]
-        : ["text", (msg.text ?? "").slice(0, 500)];
-    await db.attachReceipt(env, orderId, kind, receipt);
-    await db.setState(env, ctx.from.id, null);
-    await ctx.reply(TEXT.receiptReceived);
-    const o = await db.getOrder(env, orderId);
-    if (o?.status === "review") await notifyAdmins(bot, env, o, who(u));
-  });
+  bot.on("message", (ctx) => ctx.reply("Нажмите /menu, чтобы открыть меню."));
 
   return bot;
 }
 
-function who(u: db.User | null) {
-  if (!u) return "—";
-  const name = esc(u.first_name ?? "без имени");
-  return u.username ? `${name} (@${esc(u.username)})` : name;
+/** Имя покупателя ссылкой на его профиль: из уведомления можно сразу написать ему. */
+function who(u: db.User | null, tgId: number) {
+  const name = `<a href="tg://user?id=${tgId}">${esc(u?.first_name ?? "покупатель")}</a>`;
+  return u?.username ? `${name} (@${esc(u.username)})` : name;
 }
 
 // ---------- крон: прогрев и напоминания ----------
@@ -444,7 +408,7 @@ export async function runJobs(bot: Bot, env: Env) {
         const o = await db.getOrder(env, j.ref);
         const c = o && courseById(o.course_id);
         if (o?.status === "awaiting" && c) {
-          await bot.api.sendMessage(j.tg_id, TEXT.cart(c.title), { ...H, reply_markup: requisitesKb(env, o.id) });
+          await bot.api.sendMessage(j.tg_id, TEXT.cart(c.title), { ...H, reply_markup: payKb(env, o.id, c.title) });
         }
       } else if (j.kind.startsWith("nurture") && !(await db.paidCourseIds(env, j.tg_id)).length) {
         const rec = courseById(RECOMMEND[(user.age as Age) ?? "a7_9"] ?? "hello")!;
