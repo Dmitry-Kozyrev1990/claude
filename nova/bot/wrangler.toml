@@ -1,0 +1,21 @@
+name = "nova-bot"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Раз в 15 минут: прогрев, напоминания о неоплаченных заказах
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nova-bot"
+database_id = "REPLACE_WITH_D1_ID" # wrangler d1 create nova-bot
+
+[vars]
+BOT_USERNAME = "REPLACE_BOT_USERNAME"      # без @
+SUPPORT_USERNAME = "dmitrykozyrev"         # без @, ваш личный Telegram: сюда пишут для оплаты
+
+# Секреты задаются командой `npx wrangler secret put <NAME>`:
+#   BOT_TOKEN       токен от @BotFather
+#   WEBHOOK_SECRET  длинная случайная строка
+#   ADMIN_IDS       ваш Telegram id (несколько через запятую)
