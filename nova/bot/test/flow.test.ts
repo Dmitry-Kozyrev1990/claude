@@ -137,6 +137,20 @@ const cronMsgs = calls.slice(b6).filter((c) => c.payload.chat_id === 333).map((c
 check("крон: напоминание о заказе + 3 сообщения прогрева для нового", cronMsgs.length === 4, cronMsgs);
 check("крон: купившему прогрев не шлём", !calls.slice(b6).some((c) => c.payload.chat_id === U), calls.slice(b6).filter((c) => c.payload.chat_id === U));
 
+// тексты встреч: влезают в сообщение Telegram и не ломают HTML-разметку
+const { COURSES } = await import("../src/content");
+for (const c of COURSES) for (const [i, l] of c.lessons.entries()) {
+  const header = `Встреча ${i + 1} из ${c.lessons.length} · около ${l.minutes} мин\n${l.title}\n\n`;
+  const plain = (header + l.text).replace(/<[^>]+>/g, "");
+  const tags = [...l.text.matchAll(/<\/?([a-z]+)[^>]*>/g)].map((m) => m[1]);
+  const bad = tags.filter((t) => !["b", "i", "a", "code"].includes(t));
+  const open = (t: string) => (l.text.match(new RegExp(`<${t}[ >]`, "g")) ?? []).length;
+  const close = (t: string) => (l.text.match(new RegExp(`</${t}>`, "g")) ?? []).length;
+  const balanced = ["b", "i", "a", "code"].every((t) => open(t) === close(t));
+  if (plain.length > 4096 || bad.length || !balanced) check(`встреча ${c.id}#${i + 1}: длина ${plain.length}, теги ок`, false, { bad, balanced });
+}
+check("все тексты встреч ≤ 4096 знаков и с корректной разметкой", true);
+
 await proxy.dispose();
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED");
 process.exit(fails ? 1 : 0);
