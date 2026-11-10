@@ -428,6 +428,291 @@
     "card": "tg_3110_reviews",
     "text": "T3110"
    }
+  ],
+  "2026-11-10": [
+   {
+    "key": "tg_1011",
+    "type": "tg_photo",
+    "card": "tg_1011_scam",
+    "text": "T1011"
+   },
+   {
+    "key": "ig_1011",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_1011_1",
+     "ig_1011_2",
+     "ig_1011_3",
+     "ig_1011_4",
+     "ig_1011_5"
+    ],
+    "text": "IG1011"
+   }
+  ],
+  "2026-11-11": [
+   {
+    "key": "tg_1111",
+    "type": "tg_photo",
+    "card": "tg_1111_app",
+    "text": "T1111"
+   },
+   {
+    "key": "doc_1111",
+    "type": "tg_doc",
+    "file": "app_template.pdf"
+   }
+  ],
+  "2026-11-12": [
+   {
+    "key": "tg_1211",
+    "type": "tg_photo",
+    "card": "tg_1211_secrets",
+    "text": "T1211"
+   },
+   {
+    "key": "ig_1211",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_1211_1",
+     "ig_1211_2",
+     "ig_1211_3",
+     "ig_1211_4",
+     "ig_1211_5"
+    ],
+    "text": "IG1211"
+   }
+  ],
+  "2026-11-13": [
+   {
+    "key": "tg_1311",
+    "type": "tg_photo",
+    "card": "tg_1311_noise",
+    "text": "T1311"
+   }
+  ],
+  "2026-11-14": [
+   {
+    "key": "tg_1411",
+    "type": "tg_photo",
+    "card": "tg_1411_kitchen",
+    "text": "T1411"
+   },
+   {
+    "key": "ig_1411",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_1411_1",
+     "ig_1411_2",
+     "ig_1411_3",
+     "ig_1411_4",
+     "ig_1411_5"
+    ],
+    "text": "IG1411"
+   }
+  ],
+  "2026-11-15": [
+   {
+    "key": "tg_1511",
+    "type": "tg_photo",
+    "card": "tg_1511_week",
+    "text": "T1511"
+   }
+  ],
+  "2026-11-16": [
+   {
+    "key": "tg_1611",
+    "type": "tg_photo",
+    "card": "tg_1611_tutor",
+    "text": "T1611"
+   },
+   {
+    "key": "ig_1611",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_1611_1",
+     "ig_1611_2",
+     "ig_1611_3",
+     "ig_1611_4",
+     "ig_1611_5"
+    ],
+    "text": "IG1611"
+   }
+  ],
+  "2026-11-17": [
+   {
+    "key": "tg_1711",
+    "type": "tg_photo",
+    "card": "tg_1711_letters",
+    "text": "T1711"
+   }
+  ],
+  "2026-11-18": [
+   {
+    "key": "tg_1811",
+    "type": "tg_photo",
+    "card": "tg_1811_toy",
+    "text": "T1811"
+   }
+  ],
+  "2026-11-19": [
+   {
+    "key": "tg_1911",
+    "type": "tg_photo",
+    "card": "tg_1911_alice",
+    "text": "T1911"
+   },
+   {
+    "key": "ig_1911",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_1911_1",
+     "ig_1911_2",
+     "ig_1911_3",
+     "ig_1911_4",
+     "ig_1911_5"
+    ],
+    "text": "IG1911"
+   }
+  ],
+  "2026-11-20": [
+   {
+    "key": "tg_2011",
+    "type": "tg_photo",
+    "card": "tg_2011_rights",
+    "text": "T2011"
+   },
+   {
+    "key": "ig_2011",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_2011_1",
+     "ig_2011_2",
+     "ig_2011_3",
+     "ig_2011_4",
+     "ig_2011_5"
+    ],
+    "text": "IG2011"
+   }
+  ],
+  "2026-11-21": [
+   {
+    "key": "tg_2111",
+    "type": "tg_photo",
+    "card": "tg_2111_riddle",
+    "text": "T2111"
+   }
+  ],
+  "2026-11-22": [
+   {
+    "key": "tg_2211",
+    "type": "tg_photo",
+    "card": "tg_2211_week",
+    "text": "T2211"
+   }
+  ],
+  "2026-11-23": [
+   {
+    "key": "tg_2311",
+    "type": "tg_photo",
+    "card": "tg_2311_toy",
+    "text": "T2311"
+   },
+   {
+    "key": "ig_2311",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_2311_1",
+     "ig_2311_2",
+     "ig_2311_3",
+     "ig_2311_4",
+     "ig_2311_5"
+    ],
+    "text": "IG2311"
+   }
+  ],
+  "2026-11-25": [
+   {
+    "key": "tg_2511",
+    "type": "tg_photo",
+    "card": "tg_2511_card",
+    "text": "T2511"
+   },
+   {
+    "key": "ig_2511",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_2511_1",
+     "ig_2511_2",
+     "ig_2511_3",
+     "ig_2511_4",
+     "ig_2511_5"
+    ],
+    "text": "IG2511"
+   }
+  ],
+  "2026-11-26": [
+   {
+    "key": "tg_2611",
+    "type": "tg_photo",
+    "card": "tg_2611_choose",
+    "text": "T2611"
+   }
+  ],
+  "2026-11-27": [
+   {
+    "key": "tg_2711",
+    "type": "tg_photo",
+    "card": "tg_2711_date",
+    "text": "T2711"
+   }
+  ],
+  "2026-11-28": [
+   {
+    "key": "tg_2811",
+    "type": "tg_photo",
+    "card": "tg_2811_gallery",
+    "text": "T2811"
+   }
+  ],
+  "2026-11-29": [
+   {
+    "key": "tg_2911",
+    "type": "tg_photo",
+    "card": "tg_2911_mom",
+    "text": "T2911"
+   },
+   {
+    "key": "ig_2911",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_2911_1",
+     "ig_2911_2",
+     "ig_2911_3",
+     "ig_2911_4",
+     "ig_2911_5"
+    ],
+    "text": "IG2911"
+   }
+  ],
+  "2026-11-30": [
+   {
+    "key": "tg_3011",
+    "type": "tg_photo",
+    "card": "tg_3011_rules",
+    "text": "T3011"
+   },
+   {
+    "key": "ig_3011",
+    "type": "ig_carousel",
+    "cards": [
+     "ig_3011_1",
+     "ig_3011_2",
+     "ig_3011_3",
+     "ig_3011_4",
+     "ig_3011_5"
+    ],
+    "text": "IG3011"
+   }
   ]
  }
 }
